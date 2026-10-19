@@ -104,6 +104,26 @@ static class Smoke
                 }
             }
         // style budgets (§8): foe ≤ 400 vertices, elite and boss ≤ 1500, hero ≤ 1000, wall module ≤ 2000
+        int modelFoe = 0, modelHero = 0;
+        foreach (var kv in Content.Enemies)
+        {
+            string mk;
+            if (!Board3D.FoeModels.TryGetValue(kv.Key, out mk)) { errors++; Console.WriteLine($"MODEL foe {kv.Key}: no model mapped"); continue; }
+            var ma = Models.Model(mk, false, true, null);
+            if (ma == null) { errors++; Console.WriteLine($"MODEL foe {kv.Key}: {mk} not found"); continue; }
+            modelFoe = Math.Max(modelFoe, ma.Mesh.VertexCount);
+            if (ma.Mesh.VertexCount > 400) { errors++; Console.WriteLine($"BUDGET model {mk}: {ma.Mesh.VertexCount} > 400"); }
+        }
+        foreach (var hd in Content.Heroes)
+        {
+            string mk;
+            var ma = Board3D.HeroModels.TryGetValue(hd.Id, out mk) ? Models.Model(mk, true, false, null) : null;
+            if (ma == null) { errors++; Console.WriteLine($"MODEL hero {hd.Id}: no model"); continue; }
+            modelHero = Math.Max(modelHero, ma.Mesh.VertexCount);
+            if (ma.Mesh.VertexCount > 1000) { errors++; Console.WriteLine($"BUDGET model {mk}: {ma.Mesh.VertexCount} > 1000"); }
+        }
+        Console.WriteLine($"delivered models: foe max {modelFoe} verts, hero max {modelHero} verts");
+        // the procedural fallbacks (bosses, pods, and any unit whose model is missing)
         foreach (var kv in Content.Enemies)
         {
             int n = Models.Foe(kv.Key, kv.Value.Color, kv.Value.Elite).VertexCount, cap = kv.Value.Elite ? 1500 : 400;

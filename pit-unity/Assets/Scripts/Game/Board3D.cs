@@ -6,7 +6,8 @@
 //   • One white key light with soft shadows, a trilight ambient, linear fog in the background colour, and Bloom whose
 //     threshold only the over-bright Glow layer and emissive eyes reach.
 //   • Low-poly floor tiles, modular walls and broken pillars sinking into the fog; one pooled view per foe, boss and
-//     the hero, animated at a stepped 10 fps.
+//     the hero, animated at a stepped 10 fps. Heroes and foes are the art team's models (Models.Model, mapped below);
+//     the three bosses and the brood pods are still procedural (no models delivered yet).
 // The UI keeps its own orthographic camera, stacked on top as a URP overlay camera.
 using System.Collections.Generic;
 using Pit.Core;
@@ -33,6 +34,7 @@ namespace Pit.Game
         public readonly Transform WorldRoot;
         readonly Transform root, board, units;
         readonly Material unitMat;
+        readonly Shader unitShader;
         readonly Mesh[] wallMods;
         readonly GameObject floor;
         readonly MeshFilter floorMf;
@@ -40,9 +42,26 @@ namespace Pit.Game
         int floorCols = -1, floorRows = -1;
         Run lastRun;
 
+        // game ids -> delivered models. Foes without a model of their own borrow the closest archetype (art-bible §5).
+        internal static readonly Dictionary<string, string> FoeModels = new Dictionary<string, string>
+        {
+            { "grunt", "enemy_shambler" }, { "mite", "enemy_mite" }, { "brick", "enemy_brute" }, { "archer", "enemy_spitter" },
+            { "slab", "enemy_slab" }, { "popper", "enemy_broodpot" }, { "mender", "enemy_mender" }, { "mortar", "enemy_lobber" },
+            { "flyer", "enemy_mite" }, { "skitter", "enemy_mite" }, { "dasher", "enemy_mite" },
+            { "pavise", "enemy_brute" }, { "flanker", "enemy_brute" }, { "hulk", "enemy_brute" },
+            { "nester", "enemy_broodpot" }, { "chiller", "enemy_spitter" }, { "lancer", "enemy_spitter" }, { "volleyer", "enemy_spitter" },
+            { "delver", "enemy_shambler" }, { "burr", "enemy_shambler" }, { "gulper", "enemy_slab" }, { "hurler", "enemy_lobber" },
+        };
+        // six heroes, four models (art-bible §4): the closest look per twist; Scatterjack and Fanfare share one
+        internal static readonly Dictionary<string, string> HeroModels = new Dictionary<string, string>
+        {
+            { "tinker", "hero_tinker" }, { "needle", "hero_wren" }, { "bulwark", "hero_osk" }, { "ricco", "hero_juno" },
+            { "scatter", "hero_wren" }, { "fanfare", "hero_osk" },
+        };
+
         sealed class View
         {
-            public GameObject Go;
+            public GameObject Go, Body;
             public MeshFilter Mf;
             public MeshRenderer Mr;
             public MaterialPropertyBlock Mpb;
@@ -146,6 +165,7 @@ namespace Pit.Game
             var sh = Resources.Load<Shader>("PitUnit");
             if (sh == null) sh = Shader.Find("Universal Render Pipeline/Simple Lit");
             if (sh == null) sh = Shader.Find("Standard");
+            unitShader = sh;
             unitMat = new Material(sh) { name = "pit-unit" };
 
             board = new GameObject("Pit").transform;
@@ -214,8 +234,8 @@ namespace Pit.Game
             if (!board.gameObject.activeSelf) return;
             f(floorMf.sharedMesh, Vector3.zero, new Vector3(1, 1, 1), 0);
             foreach (var w in walls) if (w.activeSelf) f(w.GetComponent<MeshFilter>().sharedMesh, w.transform.localPosition, new Vector3(1, 1, 1), 0);
-            foreach (var kv in live) if (kv.Value.Go.activeSelf) f(kv.Value.Mf.sharedMesh, kv.Value.Go.transform.localPosition, kv.Value.Go.transform.localScale, 0);
-            if (hero != null && hero.Go.activeSelf) f(hero.Mf.sharedMesh, hero.Go.transform.localPosition, hero.Go.transform.localScale, Mathf.Round((r.P.Aim - 90) / 7.5f) * 7.5f);
+            foreach (var kv in live) if (kv.Value.Go.activeSelf) f(kv.Value.Mf.sharedMesh, kv.Value.Go.transform.localPosition, Vector3.Scale(kv.Value.Go.transform.localScale, kv.Value.Body.transform.localScale), 0);
+            if (hero != null && hero.Go.activeSelf) f(hero.Mf.sharedMesh, hero.Go.transform.localPosition, Vector3.Scale(hero.Go.transform.localScale, hero.Body.transform.localScale), Mathf.Round((r.P.Aim - 90) / 7.5f) * 7.5f);
         }
 
         // ------------------------------------------------------------ camera fit and picking
@@ -338,8 +358,10 @@ namespace Pit.Game
         View NewView()
         {
             var v = new View();
-            v.Go = MakeObject("unit", units, null, out v.Mf);
-            v.Mr = v.Go.GetComponent<MeshRenderer>();
+            v.Go = new GameObject("unit");
+            v.Go.transform.SetParent(units, false);
+            v.Body = MakeObject("body", v.Go.transform, null, out v.Mf);
+            v.Mr = v.Body.GetComponent<MeshRenderer>();
             v.Mpb = new MaterialPropertyBlock();
             v.Plates = new GameObject[3];
             for (int i = 0; i < 3; i++)
@@ -370,8 +392,10 @@ namespace Pit.Game
                 if (v.Go.activeSelf == hide) v.Go.SetActive(!hide);
                 if (hide) continue;
 
-                Mesh mesh = MeshFor(e);
-                if (v.Mf.sharedMesh != mesh) v.Mf.sharedMesh = mesh;
+                string mk;
+                var model = !e.Boss && !e.Pod && FoeModels.TryGetValue(e.Type, out mk) ? Models.Model(mk, false, true, unitShader) : null;
+                Mesh mesh = model != null ? model.Mesh : MeshFor(e);
+                if (v.Mf.sharedMesh != mesh) { v.Mf.sharedMesh = mesh; v.Mr.sharedMaterial = model != null ? model.Mat : unitMat; }
 
                 float cx = e.Cx + e.Ox, cy = e.Cy + e.Oy, z = 0;
                 float grow = 1;
@@ -392,6 +416,7 @@ namespace Pit.Game
                 v.Go.transform.localPosition = P(cx, cy, z);
                 v.Go.transform.localScale = v.Scale;
                 v.Go.transform.localRotation = Quaternion.identity;
+                v.Body.transform.localScale = model != null ? Fit(model, fw, fh) : Vector3.one;
 
                 float tint = 1;
                 Color tintCol = Color.white;
@@ -426,6 +451,18 @@ namespace Pit.Game
                 v.Mr.SetPropertyBlock(v.Mpb);
             }
             foreach (var id in gone) { pool.Push(live[id]); live.Remove(id); }
+        }
+
+        /// <summary>
+        /// Body scale under a view scaled (fw, fh, fz) that makes a model fill its footprint: uniform where the model's
+        /// proportions allow, stretched along x only for the 2-wide foes (the models are ~1:1, the hitbox is 2:1).
+        /// </summary>
+        static Vector3 Fit(Models.Asset m, float fw, float fh)
+        {
+            float fz = Mathf.Sqrt(fw * fh);
+            float s = Mathf.Min(fw / (2 * m.Half.x), fh / (2 * m.Half.y));
+            float sx = fw > fh * 1.5f ? fw / (2 * m.Half.x) : s;
+            return new Vector3(sx / fw, s / fh, s / fz);
         }
 
         static Mesh MeshFor(Enemy e)
@@ -469,7 +506,17 @@ namespace Pit.Game
             bool show = r.Mode != Mode.GameOver;
             if (hero.Go.activeSelf != show) hero.Go.SetActive(show);
             if (!show) return;
-            if (heroMesh != r.Hero.Id) { hero.Mf.sharedMesh = Models.Hero(r.Hero.Id, r.Hero.Color); heroMesh = r.Hero.Id; }
+            if (heroMesh != r.Hero.Id)
+            {
+                string mk;
+                var model = HeroModels.TryGetValue(r.Hero.Id, out mk) ? Models.Model(mk, true, false, unitShader) : null;
+                hero.Mf.sharedMesh = model != null ? model.Mesh : Models.Hero(r.Hero.Id, r.Hero.Color);
+                hero.Mr.sharedMaterial = model != null ? model.Mat : unitMat;
+                // a model fills the hero's circle, but stands no taller than one cell
+                float k = model != null ? Mathf.Min(1 / (2 * Mathf.Max(model.Half.x, model.Half.y)), 1 / (r.P.R * 2 * K * 1.15f * model.Half.z)) : 1;
+                hero.Body.transform.localScale = new Vector3(k, k, k);
+                heroMesh = r.Hero.Id;
+            }
             var p = r.P;
             float st = Step(r.Time);
             bool moving = r.InputX != 0 || r.InputY != 0;

@@ -1,11 +1,18 @@
 // Low-poly units and scenery (style.md §3, §4, §6): flat vertex colours, one main light with soft shadows, a
 // three-colour ambient (sky / equator / ground from _Pit* globals set by Board3D), linear fog, and the hit feedback:
 // _Flash (white), _Ice (frozen overlay), _Bleed (noise patches seeded per unit). uv.x marks emissive faces, which are
-// pushed over the bloom threshold and tinted by _EmisTint. Written for URP; unverified until built in the Editor.
+// pushed over the bloom threshold and tinted by _EmisTint. Written for URP.
+// Delivered models (_Textured = 1) take their colour from _MainTex instead and use uv as texture coordinates; with
+// _TexEmit = 1 their light painted accents (the foes' eyes, seams and flues, there is no emissive map yet) glow in
+// _EmisColor.
 Shader "Pit/Unit"
 {
     Properties
     {
+        _MainTex ("Albedo", 2D) = "white" {}
+        _Textured ("Textured model", Float) = 0
+        _TexEmit ("Glow from light albedo", Float) = 0
+        _EmisColor ("Glow colour", Color) = (1, 0.62, 0.29, 1)
         _Flash ("Flash", Range(0, 1)) = 0
         _Ice ("Ice", Range(0, 1)) = 0
         _Bleed ("Bleed", Range(0, 1)) = 0
@@ -34,10 +41,11 @@ Shader "Pit/Unit"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
-                float _Flash, _Ice, _Bleed, _Seed, _EmisBoost;
-                float4 _EmisTint;
+                float _Flash, _Ice, _Bleed, _Seed, _EmisBoost, _Textured, _TexEmit;
+                float4 _EmisTint, _EmisColor, _MainTex_ST;
             CBUFFER_END
             float4 _PitSky, _PitEquator, _PitGround;
+            TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
 
             struct Attributes
             {
@@ -100,6 +108,12 @@ Shader "Pit/Unit"
                 float3 amb = up >= 0 ? lerp(_PitEquator.rgb, _PitSky.rgb, up) : lerp(_PitEquator.rgb, _PitGround.rgb, -up);
 
                 float3 albedo = i.color.rgb;
+                float emit = i.uv.x;
+                if (_Textured > 0.5)
+                {
+                    albedo *= SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv).rgb;
+                    emit = _TexEmit * smoothstep(0.26, 0.42, dot(albedo, float3(0.3, 0.59, 0.11)));
+                }
                 float bn = noise3(i.positionOS * 7.0 + _Seed * 13.17);
                 albedo = lerp(albedo, float3(0.32, 0.02, 0.05), _Bleed * smoothstep(0.52, 0.66, bn));
 
@@ -110,7 +124,8 @@ Shader "Pit/Unit"
                 float3 ice = lerp(float3(0.16, 0.42, 0.5), float3(0.8, 0.98, 0.92), rim) * (0.6 + 0.4 * ndl);
                 col = lerp(col, ice, _Ice * 0.8);
 
-                col += albedo * i.uv.x * _EmisBoost * _EmisTint.rgb;
+                float3 glow = _Textured > 0.5 ? _EmisColor.rgb : albedo;
+                col += glow * emit * _EmisBoost * _EmisTint.rgb;
                 col = lerp(col, float3(1, 1, 1), _Flash * 0.85);
                 col = MixFog(col, i.fog);
                 return half4(col, 1);

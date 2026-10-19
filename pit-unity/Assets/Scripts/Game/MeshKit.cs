@@ -397,6 +397,62 @@ namespace Pit.Game
             k.Eye(new Vector3(dx, y, z), r, c);
         }
 
+        // ------------------------------------------------------------ delivered models (pit-art/models/lowpoly)
+        /// <summary>A delivered low-poly model: mesh in unit space (feet at z = 0, rising along -z), its material and
+        /// its half-extents (x, y footprint from the pivot; z height).</summary>
+        public sealed class Asset { public Mesh Mesh; public Material Mat; public Vector3 Half; }
+        static readonly Dictionary<string, Asset> assets = new Dictionary<string, Asset>();
+
+        /// <summary>
+        /// Loads Resources/Models/&lt;name&gt;.bytes (written by Tools/glb_to_bytes.py from the art team's GLB, Blender axes:
+        /// -y front, z up) and its _albedo texture. Foes keep their front toward the hero (-y); faceAway turns the model
+        /// round so the hero shows its back to the camera and faces its aim (+y). glow fakes the missing emissive map:
+        /// the light painted accents (eyes, seams, flues) are lifted over the bloom threshold in the shader.
+        /// </summary>
+        public static Asset Model(string name, bool faceAway, bool glow, Shader shader)
+        {
+            Asset a;
+            if (assets.TryGetValue(name, out a)) return a;
+            var ta = Resources.Load<TextAsset>("Models/" + name);
+            if (ta == null) { assets[name] = null; return null; }
+            var b = ta.bytes;
+            int nv = System.BitConverter.ToInt32(b, 0), ni = System.BitConverter.ToInt32(b, 4), o = 8;
+            var pos = new List<Vector3>(nv); var nor = new List<Vector3>(nv); var uv = new List<Vector2>(nv); var col = new List<Color32>(nv);
+            float s = faceAway ? -1 : 1;
+            var mn = new Vector3(1e9f, 1e9f, 1e9f); var mx = -mn;
+            for (int i = 0; i < nv; i++, o += 32)
+            {
+                var p = new Vector3(s * F(b, o), s * F(b, o + 4), -F(b, o + 8));
+                pos.Add(p); mn = Vector3.Min(mn, p); mx = Vector3.Max(mx, p);
+                nor.Add(new Vector3(s * F(b, o + 12), s * F(b, o + 16), -F(b, o + 20)));
+                uv.Add(new Vector2(F(b, o + 24), F(b, o + 28)));
+                col.Add(new Color32(255, 255, 255, 255));
+            }
+            var tri = new List<int>(ni);
+            for (int i = 0; i < ni; i++, o += 2) tri.Add(System.BitConverter.ToUInt16(b, o));
+            // the axis change mirrors the model; keep Unity's front face (normal = Cross(b - a, c - a)) on the outside
+            float agree = 0;
+            for (int i = 0; i < ni; i += 3)
+                agree += Vector3.Dot(Vector3.Cross(pos[tri[i + 1]] - pos[tri[i]], pos[tri[i + 2]] - pos[tri[i]]), nor[tri[i]] + nor[tri[i + 1]] + nor[tri[i + 2]]);
+            if (agree < 0) for (int i = 0; i < ni; i += 3) { int x = tri[i + 1]; tri[i + 1] = tri[i + 2]; tri[i + 2] = x; }
+            var m = new Mesh { name = name };
+            m.SetVertices(pos); m.SetNormals(nor); m.SetColors(col); m.SetUVs(0, uv); m.SetTriangles(tri, 0, true);
+            var mat = new Material(shader) { name = name };
+            mat.SetTexture("_MainTex", Resources.Load<Texture2D>("Models/" + name + "_albedo"));
+            mat.SetFloat("_Textured", 1);
+            mat.SetFloat("_TexEmit", glow ? 1 : 0);
+            a = new Asset
+            {
+                Mesh = m, Mat = mat,
+                Half = new Vector3(Mathf.Max(-mn.x, mx.x), Mathf.Max(-mn.y, mx.y), mx.z - mn.z),
+            };
+            assets[name] = a;
+            if (glow) MaxFoeVerts = Mathf.Max(MaxFoeVerts, nv); else HeroVerts = Mathf.Max(HeroVerts, nv);
+            return a;
+        }
+
+        static float F(byte[] b, int o) { return System.BitConverter.ToSingle(b, o); }
+
         // ------------------------------------------------------------ parts that toggle at runtime
         public static Mesh Plate()
         {

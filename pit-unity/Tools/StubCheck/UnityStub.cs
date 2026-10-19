@@ -86,6 +86,9 @@ namespace UnityEngine
         public static Vector3 operator /(Vector3 a, float k) { return new Vector3(a.x / k, a.y / k, a.z / k); }
         public static Vector3 Cross(Vector3 a, Vector3 b) { return new Vector3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x); }
         public static float Dot(Vector3 a, Vector3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+        public static Vector3 one { get { return new Vector3(1, 1, 1); } }
+        public static Vector3 Min(Vector3 a, Vector3 b) { return new Vector3(System.Math.Min(a.x, b.x), System.Math.Min(a.y, b.y), System.Math.Min(a.z, b.z)); }
+        public static Vector3 Max(Vector3 a, Vector3 b) { return new Vector3(System.Math.Max(a.x, b.x), System.Math.Max(a.y, b.y), System.Math.Max(a.z, b.z)); }
         public static Vector3 Scale(Vector3 a, Vector3 b) { return new Vector3(a.x * b.x, a.y * b.y, a.z * b.z); }
     }
     public struct Quaternion { public static Quaternion identity { get { return default; } } public static Quaternion Euler(float x, float y, float z) { return default; } }
@@ -117,6 +120,7 @@ namespace UnityEngine
     public enum TextureFormat { RGBA32 = 4 }
     public enum FilterMode { Point, Bilinear, Trilinear }
     public enum TextureWrapMode { Repeat, Clamp }
+    public sealed class TextAsset : Object { public byte[] bytes; }
     public sealed class Texture2D : Object
     {
         readonly int w, h;
@@ -196,7 +200,15 @@ namespace UnityEngine
         public static string Root;
         public static T Load<T>(string p) where T : Object
         {
-            if (typeof(T) != typeof(AudioClip) || Root == null) return null;
+            if (Root == null) return null;
+            if (typeof(T) == typeof(TextAsset))
+            {
+                var fb = System.IO.Path.Combine(Root, p + ".bytes");
+                return System.IO.File.Exists(fb) ? (T)(Object)new TextAsset { name = p, bytes = System.IO.File.ReadAllBytes(fb) } : null;
+            }
+            if (typeof(T) == typeof(Texture2D))
+                return System.IO.File.Exists(System.IO.Path.Combine(Root, p + ".png")) ? (T)(Object)new Texture2D(4, 4, TextureFormat.RGBA32, false) { name = p } : null;
+            if (typeof(T) != typeof(AudioClip)) return null;
             var f = System.IO.Path.Combine(Root, p + ".mp3");
             return System.IO.File.Exists(f) ? (T)(Object)new AudioClip { name = p, length = p.Contains("music") ? 30 : 0.15f } : null;
         } public static T GetBuiltinResource<T>(string p) where T : Object { return typeof(T) == typeof(Font) ? (T)(Object)new Font() : null; } }
