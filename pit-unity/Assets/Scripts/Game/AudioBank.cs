@@ -97,7 +97,7 @@ namespace Pit.Game
             voices[v].volume = 1;
             voices[v].Play();
             voiceKey[v] = s;
-            voiceEnd[v] = now + clip.length / Mathf.Max(0.1f, pitch);
+            voiceEnd[v] = now + Len(clip) / Mathf.Max(0.1f, pitch);
             lastPlay[k] = now;
         }
 
@@ -107,7 +107,7 @@ namespace Pit.Game
             if (click == null) { var c = Clips("ui_click"); if (c.Length == 0) return; click = c[0]; }
             int v = FreeVoice(now);
             voices[v].pitch = 1; voices[v].volume = 1; voices[v].clip = click; voices[v].Play();
-            voiceKey[v] = (Sfx)(-1); voiceEnd[v] = now + click.length;
+            voiceKey[v] = (Sfx)(-1); voiceEnd[v] = now + Len(click);
         }
 
         /// <summary>Battle loop on while in a run, paused while the run is paused, off elsewhere.</summary>
@@ -121,6 +121,9 @@ namespace Pit.Game
             if (!musicOn) { music.Play(); musicOn = true; }
             else if (!music.isPlaying) music.UnPause();
         }
+
+        // WebGL reports length 0 until a clip has finished decoding; assume a short SFX so the voice caps still hold
+        static float Len(AudioClip c) { return c.length > 0 ? c.length : 0.2f; }
 
         int FreeVoice(float now)
         {

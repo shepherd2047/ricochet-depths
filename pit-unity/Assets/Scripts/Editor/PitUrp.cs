@@ -50,8 +50,8 @@ namespace Pit.EditorTools
             Set(so, "m_ShadowDistance", 30f);
             Set(so, "m_ShadowCascadeCount", 1);
             Set(so, "m_SoftShadowsSupported", true);
-            Set(so, "m_SupportsCameraDepthTexture", false);
-            Set(so, "m_SupportsCameraOpaqueTexture", false);
+            Set(so, so.FindProperty("m_RequireDepthTexture") != null ? "m_RequireDepthTexture" : "m_SupportsCameraDepthTexture", false);    // URP 17 / 14 names
+            Set(so, so.FindProperty("m_RequireOpaqueTexture") != null ? "m_RequireOpaqueTexture" : "m_SupportsCameraOpaqueTexture", false);
             so.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(asset);
 

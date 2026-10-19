@@ -33,7 +33,7 @@ namespace Pit.Game
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Boot()
         {
-            if (FindObjectOfType<GameRoot>() != null) return;
+            if (FindAnyObjectByType<GameRoot>() != null) return;
             var go = new GameObject("Pit");
             DontDestroyOnLoad(go);
             go.AddComponent<GameRoot>();
@@ -47,7 +47,7 @@ namespace Pit.Game
             platform = PlatformHost.Current;
             platform.OnBoot();
 
-            foreach (var c in FindObjectsOfType<Camera>()) c.enabled = false;
+            foreach (var c in Camera.allCameras) c.enabled = false;
             var cg = new GameObject("Pit UI Camera");
             cg.transform.SetParent(transform, false);
             cam = cg.AddComponent<Camera>();

@@ -2,6 +2,7 @@
 // The game builds itself at runtime (GameRoot.Boot), so the scene only has to exist.
 using System.IO;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
@@ -25,7 +26,7 @@ namespace Pit.EditorTools
         [MenuItem("Pit/Apply WebGL Size Settings")]
         public static void ApplySettings()
         {
-            var g = BuildTargetGroup.WebGL;
+            var g = NamedBuildTarget.WebGL;
             PlayerSettings.companyName = "Pit";
             PlayerSettings.productName = "Ricochet Depths";
             PlayerSettings.colorSpace = ColorSpace.Gamma;
@@ -40,6 +41,8 @@ namespace Pit.EditorTools
             PlayerSettings.WebGL.linkerTarget = WebGLLinkerTarget.Wasm;
             PlayerSettings.SetGraphicsAPIs(BuildTarget.WebGL, new[] { UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3 });
             PlayerSettings.runInBackground = false;
+            PlayerSettings.SplashScreen.show = false;        // the Unity logo alone is 2.7 MB of data (optional since Unity 6)
+            PlayerSettings.SplashScreen.showUnityLogo = false;
             PlayerSettings.defaultWebScreenWidth = 360;
             PlayerSettings.defaultWebScreenHeight = 640;
             Debug.Log("Pit: WebGL size settings applied (IL2CPP master, stripping High, engine stripping, explicit exceptions only, Brotli, WebGL2 only)");
@@ -58,11 +61,11 @@ namespace Pit.EditorTools
         {
             if (!File.Exists(ScenePath)) CreateScene();
             ApplySettings();
-            var defines = PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.WebGL);
+            var defines = PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.WebGL);
             bool has = defines.Contains("PIT_TIKTOK");
             if (tiktok && !has) defines = (defines.Length > 0 ? defines + ";" : "") + "PIT_TIKTOK";
             if (!tiktok && has) defines = defines.Replace(";PIT_TIKTOK", "").Replace("PIT_TIKTOK;", "").Replace("PIT_TIKTOK", "");
-            PlayerSettings.SetScriptingDefineSymbolsForGroup(BuildTargetGroup.WebGL, defines);
+            PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.WebGL, defines);
 
             var opts = new BuildPlayerOptions
             {
@@ -73,7 +76,9 @@ namespace Pit.EditorTools
             };
             var report = BuildPipeline.BuildPlayer(opts);
             var s = report.summary;
-            Debug.Log("Pit: build " + s.result + ", " + (s.totalSize / 1024f / 1024f).ToString("0.0") + " MB, " + s.totalTime);
+            long bytes = 0;     // the WebGL report's totalSize is 0, so measure the output folder
+            if (Directory.Exists(OutDir)) foreach (var f in Directory.GetFiles(OutDir, "*", SearchOption.AllDirectories)) bytes += new FileInfo(f).Length;
+            Debug.Log("Pit: build " + s.result + ", " + (bytes / 1024f / 1024f).ToString("0.0") + " MB on disk, " + s.totalTime);
             if (Application.isBatchMode && s.result != UnityEditor.Build.Reporting.BuildResult.Succeeded) EditorApplication.Exit(1);
         }
     }

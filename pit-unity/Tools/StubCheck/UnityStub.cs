@@ -104,7 +104,8 @@ namespace UnityEngine
         public static float Tan(float v) { return (float)System.Math.Tan(v); } public static float Atan2(float y, float x) { return (float)System.Math.Atan2(y, x); } public static float Pow(float a, float b) { return (float)System.Math.Pow(a, b); }
         public static float Lerp(float a, float b, float t) { return a + (b - a) * Clamp01(t); } public static float Repeat(float t, float l) { return t - (float)System.Math.Floor(t / l) * l; }
     }
-    public class Object { public string name; public static void Destroy(Object o) { } public static T FindObjectOfType<T>() where T : Object { return null; } public static T[] FindObjectsOfType<T>() where T : Object { return null; } public static void DontDestroyOnLoad(Object o) { } }
+    public enum FindObjectsSortMode { None, InstanceID }
+    public class Object { public string name; public static void Destroy(Object o) { } public static T FindAnyObjectByType<T>() where T : Object { return null; } public static T[] FindObjectsByType<T>(FindObjectsSortMode m) where T : Object { return new T[0]; } public static void DontDestroyOnLoad(Object o) { } }
     public class ScriptableObject : Object { public static T CreateInstance<T>() where T : ScriptableObject { return System.Activator.CreateInstance<T>(); } }
     public class Shader : Object { public static Shader Find(string n) { return null; } public static void SetGlobalColor(string n, Color c) { } }
     public class Material : Object
@@ -202,6 +203,7 @@ namespace UnityEngine
     public enum CameraClearFlags { Skybox = 1, SolidColor = 2, Depth = 3, Nothing = 4 }
     public sealed class Camera : Behaviour
     {
+        public static Camera[] allCameras { get { return new Camera[0]; } }
         public bool orthographic, useOcclusionCulling, allowHDR, allowMSAA; public float orthographicSize, nearClipPlane, farClipPlane, fieldOfView, depth;
         public CameraClearFlags clearFlags; public Color backgroundColor; public int cullingMask = -1;
     }
