@@ -61,6 +61,9 @@ namespace Pit.Game
         public void Unlock() { unlocked = true; }
         public bool Unlocked { get { return unlocked; } }
 
+        /// <summary>The title and pause toggles: SoundOn mutes every cue and click, MusicOn the battle loop.</summary>
+        public bool SoundOn = true, MusicOn = true;
+
         /// <summary>Plays the run's queued cues and clears the queue. sweep is true during the win "pop all" sweep.</summary>
         public void Drain(Run r, float now)
         {
@@ -72,7 +75,7 @@ namespace Pit.Game
 
         public void Play(Sfx s, float now, bool sweep = false)
         {
-            if (!unlocked) return;
+            if (!unlocked || !SoundOn) return;
             int k = (int)s;
             var rule = Rules[k];
             if (s == Sfx.Wall && now - lastPlay[k] < 0.03f) return;
@@ -103,7 +106,7 @@ namespace Pit.Game
 
         public void Click(float now)
         {
-            if (!unlocked) return;
+            if (!unlocked || !SoundOn) return;
             if (click == null) { var c = Clips("ui_click"); if (c.Length == 0) return; click = c[0]; }
             int v = FreeVoice(now);
             voices[v].pitch = 1; voices[v].volume = 1; voices[v].clip = click; voices[v].Play();
@@ -114,6 +117,7 @@ namespace Pit.Game
         public void Music(bool inBattle, bool paused)
         {
             if (!unlocked) return;
+            inBattle &= MusicOn;
             if (inBattle && !musicLoaded) { musicClip = Resources.Load<AudioClip>("Audio/music/mus_battle_loop"); musicLoaded = true; music.clip = musicClip; }
             if (musicClip == null) return;
             if (!inBattle) { if (musicOn) { music.Stop(); musicOn = false; } return; }

@@ -65,8 +65,8 @@ namespace Pit.Game
             gfx = new Gfx(layers.transform, board.WorldRoot);
             ui = new Ui(gfx);
             world = new WorldView(gfx) { Units3D = true };
-            screens = new Screens(gfx, ui);
             audio = new AudioBank(gameObject);
+            screens = new Screens(gfx, ui) { Board = board, Audio = audio, SelHero = heroId };
             seed = System.Environment.TickCount & 0x7fffffff;
         }
 
@@ -74,8 +74,10 @@ namespace Pit.Game
         {
             float dt = Mathf.Min(Time.unscaledDeltaTime, 0.1f);
             clock += dt;
-            float scale = Mathf.Min(Screen.width / DesignW, Screen.height / DesignH);
-            if (scale <= 0) return;
+            // pit-ui integer scale: s screen px per art px, so the atlas lands on whole pixels; 1 art px = 2 design units
+            int s = Mathf.Max(1, Mathf.Min(Screen.width / 180, Screen.height / 300));
+            float scale = s / 2f;
+            if (Screen.width <= 0 || Screen.height <= 0) return;
             float w = Screen.width / scale, h = Screen.height / scale;
 
             cam.orthographicSize = h / 2;
@@ -143,7 +145,7 @@ namespace Pit.Game
             float ix = 0, iy = 0;
             if (playing)
             {
-                if (ui.Pressed && !ui.PressOnWidget && ui.Y > screens.SafeTop + 50) { stick = true; stickMoved = false; stickX = ui.X; stickY = ui.Y; }
+                if (ui.Pressed && !ui.PressOnWidget && ui.Y > screens.HudTop - 30) { stick = true; stickMoved = false; stickX = ui.X; stickY = ui.Y; }
                 if (stick && ui.Down)
                 {
                     float dx = ui.X - stickX, dy = ui.Y - stickY;
@@ -203,6 +205,7 @@ namespace Pit.Game
             var nav = screens.Menus(r);
             if (nav == Nav.Again || nav == Nav.Restart) NewRun();
             else if (nav == Nav.Heroes) { screen = Screen_.Heroes; run = null; }
+            else if (nav == Nav.Quit) { screen = Screen_.Title; run = null; }
         }
 
         // backgrounded (TikTok onHide): pause the run and mute everything until we come back

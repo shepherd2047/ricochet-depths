@@ -18,7 +18,7 @@ static class Smoke
         var gfx = new Gfx(new GameObject("root").transform, board.WorldRoot);
         var ui = new Ui(gfx);
         var world = new WorldView(gfx);
-        var screens = new Screens(gfx, ui) { SafeTop = 20, SafeBottom = 10 };
+        var screens = new Screens(gfx, ui) { SafeTop = 20, SafeBottom = 10, Board = board };
         int frames = 0, errors = 0;
         Action<Action> frame = draw =>
         {

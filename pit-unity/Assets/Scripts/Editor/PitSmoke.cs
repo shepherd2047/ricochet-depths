@@ -30,7 +30,7 @@ namespace Pit.EditorTools
                 var gfx = new Gfx(layers.transform, board.WorldRoot);
                 var ui = new Ui(gfx);
                 var world = new WorldView(gfx) { Units3D = true };
-                var screens = new Screens(gfx, ui) { SafeTop = 20, SafeBottom = 10 };
+                var screens = new Screens(gfx, ui) { SafeTop = 20, SafeBottom = 10, Board = board };
                 var audio = new AudioBank(root);
                 audio.Unlock();
                 Action<Action> frame = draw =>

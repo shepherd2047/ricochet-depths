@@ -98,7 +98,7 @@ namespace Pit.Game
             Cam.nearClipPlane = Near; Cam.farClipPlane = Far;
             Cam.clearFlags = CameraClearFlags.SolidColor;
             Cam.backgroundColor = FogColor;
-            Cam.cullingMask = ~(1 << Gfx.UiLayer);
+            Cam.cullingMask = ~((1 << Gfx.UiLayer) | (1 << PreviewLayer));
             Cam.allowMSAA = false;
             Cam.allowHDR = true;          // only so bloom can see the over-bright layer
             Cam.useOcclusionCulling = false;
@@ -197,6 +197,7 @@ namespace Pit.Game
         /// <summary>Menus: keep the camera (it paints the background) but hide the pit.</summary>
         public void Idle(Gfx g)
         {
+            StopPreview();
             if (board.gameObject.activeSelf) board.gameObject.SetActive(false);
             Cam.transform.localPosition = new Vector3(0, 0, -10);
             Cam.transform.localRotation = Quaternion.identity;
@@ -204,6 +205,7 @@ namespace Pit.Game
 
         public void Frame(Run r, WorldView wv, Gfx g)
         {
+            StopPreview();
             if (!board.gameObject.activeSelf) board.gameObject.SetActive(true);
             if (r != lastRun) { Clear(); lastRun = r; }
 
@@ -220,6 +222,94 @@ namespace Pit.Game
             Scenery(r);
             Units(r);
             Hero(r);
+        }
+
+        // ------------------------------------------------------------ hero preview (hero pick, UI-SPEC §8.2)
+        public const int PreviewLayer = 30;   // unnamed layer only the preview camera renders
+        Camera previewCam;
+        RenderTexture previewRt;
+        Transform previewRoot, previewBody;
+        MeshFilter previewMf;
+        MeshRenderer previewMr;
+        string previewId;
+        int previewFrame = -10;
+
+        /// <summary>
+        /// Renders the hero's model, front-on and swaying, into a transparent RenderTexture of pw×ph pixels for the
+        /// hero-pick well. Call every frame the screen is up; the camera stops on its own when it is not called.
+        /// </summary>
+        public Texture HeroPreview(string heroId, int pw, int ph, float t)
+        {
+            pw = Mathf.Clamp(pw, 16, 1024); ph = Mathf.Clamp(ph, 16, 1024);
+            if (previewCam == null)
+            {
+                previewRoot = new GameObject("Hero Preview").transform;
+                previewRoot.SetParent(root, false);
+                previewRoot.localPosition = new Vector3(0, 0, -500);   // far above the pit, out of the board camera's view
+                var bg = new GameObject("body"); bg.layer = PreviewLayer;
+                previewBody = bg.transform; previewBody.SetParent(previewRoot, false);
+                previewMf = bg.AddComponent<MeshFilter>();
+                previewMr = bg.AddComponent<MeshRenderer>();
+                previewMr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                var cg = new GameObject("Preview Camera");
+                cg.transform.SetParent(previewRoot, false);
+                previewCam = cg.AddComponent<Camera>();
+                previewCam.cullingMask = 1 << PreviewLayer;
+                previewCam.clearFlags = CameraClearFlags.SolidColor;
+                previewCam.backgroundColor = new Color(0, 0, 0, 0);
+                previewCam.fieldOfView = 26;
+                previewCam.nearClipPlane = 0.1f; previewCam.farClipPlane = 20;
+                previewCam.allowHDR = false; previewCam.allowMSAA = false;
+                previewCam.depth = -5;
+#if PIT_URP
+                var pd = previewCam.GetUniversalAdditionalCameraData();
+                pd.renderType = CameraRenderType.Base;
+                pd.renderPostProcessing = false;
+                pd.renderShadows = false;
+                pd.antialiasing = AntialiasingMode.None;
+#endif
+                // the camera sits on the −y side and looks +y, like the board camera, so the key light comes from
+                // behind it; the hero is turned to face it
+                float a = 12 * Mathf.Deg2Rad, d = 3.1f;
+                var target = new Vector3(0, 0, -0.5f);
+                cg.transform.localPosition = target + new Vector3(0, -Mathf.Cos(a) * d, -Mathf.Sin(a) * d);
+                cg.transform.localRotation = Quaternion.LookRotation(target - cg.transform.localPosition, new Vector3(0, 0, -1));
+            }
+            if (previewRt == null || previewRt.width != pw || previewRt.height != ph)
+            {
+                if (previewRt != null) { previewCam.targetTexture = null; previewRt.Release(); Object.Destroy(previewRt); }
+                previewRt = new RenderTexture(pw, ph, 16, RenderTextureFormat.ARGB32) { name = "pit-hero-preview", filterMode = FilterMode.Point };
+                previewCam.targetTexture = previewRt;
+            }
+            if (previewId != heroId)
+            {
+                string mk;
+                var model = HeroModels.TryGetValue(heroId, out mk) ? Models.Model(mk, true, false, unitShader) : null;
+                var hd = Content.Hero(heroId);
+                previewMf.sharedMesh = model != null ? model.Mesh : Models.Hero(heroId, hd.Color);
+                previewMr.sharedMaterial = model != null ? model.Mat : unitMat;
+                float k = model != null ? 1 / Mathf.Max(model.Half.z, 0.5f * Mathf.Max(model.Half.x, model.Half.y) * 2) : 0.8f;
+                previewBody.localScale = new Vector3(k, k, k);
+                previewId = heroId;
+            }
+            // models face +y; turn to the camera, sway ±25° at the stepped animation rate
+            previewBody.localRotation = Quaternion.Euler(0, 0, 180 + 25 * Mathf.Sin(Step(t) * 0.9f));
+            previewFrame = Time.frameCount;
+            if (!previewCam.enabled) previewCam.enabled = true;
+            if (!previewRoot.gameObject.activeSelf) previewRoot.gameObject.SetActive(true);
+            return previewRt;
+        }
+
+        /// <summary>Test hook: renders the preview now (batch-mode captures don't run the camera loop).</summary>
+        public void RenderPreview() { if (previewCam != null && previewCam.enabled) previewCam.Render(); }
+
+        void StopPreview()
+        {
+            if (previewCam != null && previewCam.enabled && Time.frameCount - previewFrame > 1)
+            {
+                previewCam.enabled = false;
+                previewRoot.gameObject.SetActive(false);
+            }
         }
 
         // ------------------------------------------------------------ test hooks (Tools/StubCheck renders frames with these)

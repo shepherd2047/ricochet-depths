@@ -13,6 +13,7 @@ namespace Pit.Game
     {
         readonly Gfx g;
         public float Ox, Oy, S = 40, Top, Bottom;    // board origin and pixels per board unit
+        public bool NumbersOnHud = true;
         public bool Units3D;
 
         // heights above the board plane, in world units (negative is up; a foe is about 0.7 tall)
@@ -104,7 +105,10 @@ namespace Pit.Game
             g.Z = ZText;
             DrawHpPixels(r);
             foreach (var t in r.Texts)
+            {
+                if (NumbersOnHud && Screens.IsNumber(t.S)) continue;   // Screens draws these in the pit-ui digit fonts
                 g.PixelText(t.S, Sx(t.X), Sy(t.Y), 7.5f * t.Size, Col.Hex(t.Color, Mathf.Min(1, t.T * 3)));
+            }
             g.Z = 0;
         }
 

@@ -196,7 +196,7 @@ namespace Pit.Core
     public sealed class RunStats
     {
         public long Dmg;
-        public int Clears, Fusers, BossesKilled;
+        public int Clears, Fusers, BossesKilled, BestHit, GoldSpent;
         public readonly Dictionary<string, int> Hurt = new Dictionary<string, int>();
         public readonly List<string> Log = new List<string>();
     }

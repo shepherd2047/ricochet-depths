@@ -91,11 +91,12 @@ namespace UnityEngine
         public static Vector3 Max(Vector3 a, Vector3 b) { return new Vector3(System.Math.Max(a.x, b.x), System.Math.Max(a.y, b.y), System.Math.Max(a.z, b.z)); }
         public static Vector3 Scale(Vector3 a, Vector3 b) { return new Vector3(a.x * b.x, a.y * b.y, a.z * b.z); }
     }
-    public struct Quaternion { public static Quaternion identity { get { return default; } } public static Quaternion Euler(float x, float y, float z) { return default; } }
+    public struct Quaternion { public static Quaternion identity { get { return default; } } public static Quaternion Euler(float x, float y, float z) { return default; } public static Quaternion LookRotation(Vector3 f, Vector3 u) { return default; } }
     public struct Bounds { public Bounds(Vector3 c, Vector3 s) { size = s; } public Vector3 size; }
     public struct Rect { public float yMin, yMax, xMin, xMax; }
     public static class Mathf
     {
+        public static float MoveTowards(float a, float b, float d) { return System.Math.Abs(b - a) <= d ? b : a + System.Math.Sign(b - a) * d; }
         public const float PI = (float)System.Math.PI, Deg2Rad = PI / 180f;
         public static float Clamp(float v, float a, float b) { return v < a ? a : v > b ? b : v; } public static int Clamp(int v, int a, int b) { return v < a ? a : v > b ? b : v; }
         public static float Clamp01(float v) { return Clamp(v, 0, 1); }
@@ -114,17 +115,27 @@ namespace UnityEngine
     public class Material : Object
     {
         public Material(Shader s) { }
-        public void SetTexture(string n, Texture2D t) { } public void SetFloat(string n, float v) { }
+        public Texture mainTexture; public void SetTexture(string n, Texture t) { } public void SetFloat(string n, float v) { }
     }
     public sealed class MaterialPropertyBlock { public void SetFloat(string n, float v) { } public void SetColor(string n, Color c) { } }
     public enum TextureFormat { RGBA32 = 4 }
     public enum FilterMode { Point, Bilinear, Trilinear }
     public enum TextureWrapMode { Repeat, Clamp }
-    public sealed class TextAsset : Object { public byte[] bytes; }
-    public sealed class Texture2D : Object
+    public sealed class TextAsset : Object { public byte[] bytes; public string text { get { return System.Text.Encoding.UTF8.GetString(bytes); } } }
+    public class Texture : Object { public FilterMode filterMode; public TextureWrapMode wrapMode; public virtual int width { get { return 4; } } public virtual int height { get { return 4; } } }
+    public enum RenderTextureFormat { ARGB32 }
+    public sealed class RenderTexture : Texture
     {
         readonly int w, h;
-        public FilterMode filterMode; public TextureWrapMode wrapMode;
+        public RenderTexture(int w, int h, int depth, RenderTextureFormat f) { this.w = w; this.h = h; }
+        public override int width { get { return w; } } public override int height { get { return h; } }
+        public void Release() { }
+    }
+    public static class JsonUtility { public static T FromJson<T>(string s) { return System.Text.Json.JsonSerializer.Deserialize<T>(s, new System.Text.Json.JsonSerializerOptions { IncludeFields = true }); } }
+    public sealed class Texture2D : Texture
+    {
+        readonly int w, h;
+        public override int width { get { return w; } } public override int height { get { return h; } }
         public Texture2D(int w, int h, TextureFormat f, bool mips) { this.w = w; this.h = h; }
         public static Color32[] LastPixels; public static int LastW, LastH;
         public void SetPixels32(Color32[] px) { if (px.Length != w * h) throw new System.Exception("pixel count"); LastPixels = px; LastW = w; LastH = h; }
@@ -141,6 +152,10 @@ namespace UnityEngine
         public void SetColors(List<Color32> c) { C = new List<Color32>(c); if (c.Count != VertexCount) throw new System.Exception("colour count"); }
         public void SetNormals(List<Vector3> n) { N = new List<Vector3>(n); if (n.Count != VertexCount) throw new System.Exception("normal count"); }
         public void SetUVs(int ch, List<Vector2> u) { U = new List<Vector2>(u); if (u.Count != VertexCount) throw new System.Exception("uv count"); }
+        public Vector3[] vertices { set { SetVertices(new List<Vector3>(value)); } }
+        public Vector2[] uv { set { SetUVs(0, new List<Vector2>(value)); } }
+        public Color32[] colors32 { set { SetColors(new List<Color32>(value)); } }
+        public int[] triangles { set { SetTriangles(new List<int>(value), 0, false); } }
         public void SetTriangles(List<int> t, int sub, bool calc) { T = new List<int>(t); IndexCount = t.Count; if (t.Count % 3 != 0) throw new System.Exception("tri count"); foreach (var i in t) if (i < 0 || i >= VertexCount) throw new System.Exception("index out of range " + i); }
     }
     public class Component : Object { public GameObject gameObject; public Transform transform; public T GetComponent<T>() where T : Component { return gameObject.GetComponent<T>(); } }
@@ -177,7 +192,7 @@ namespace UnityEngine
     public enum FontStyle { Normal, Bold, Italic, BoldAndItalic }
     public enum TextAnchor { UpperLeft, UpperCenter, UpperRight, MiddleLeft, MiddleCenter, MiddleRight, LowerLeft, LowerCenter, LowerRight }
     public enum TextAlignment { Left, Center, Right }
-    public struct CharacterInfo { public int advance; }
+    public struct CharacterInfo { public int advance, glyphHeight; }
     public sealed class Font : Object
     {
         public Material material; public bool dynamic;
@@ -204,10 +219,11 @@ namespace UnityEngine
             if (typeof(T) == typeof(TextAsset))
             {
                 var fb = System.IO.Path.Combine(Root, p + ".bytes");
+                if (!System.IO.File.Exists(fb)) fb = System.IO.Path.Combine(Root, p + ".json");
                 return System.IO.File.Exists(fb) ? (T)(Object)new TextAsset { name = p, bytes = System.IO.File.ReadAllBytes(fb) } : null;
             }
             if (typeof(T) == typeof(Texture2D))
-                return System.IO.File.Exists(System.IO.Path.Combine(Root, p + ".png")) ? (T)(Object)new Texture2D(4, 4, TextureFormat.RGBA32, false) { name = p } : null;
+                return System.IO.File.Exists(System.IO.Path.Combine(Root, p + ".png")) ? (T)(Object)new Texture2D(p.EndsWith("ui_atlas") ? 2048 : 4, p.EndsWith("ui_atlas") ? 64 : 4, TextureFormat.RGBA32, false) { name = p } : null;
             if (typeof(T) != typeof(AudioClip)) return null;
             var f = System.IO.Path.Combine(Root, p + ".mp3");
             return System.IO.File.Exists(f) ? (T)(Object)new AudioClip { name = p, length = p.Contains("music") ? 30 : 0.15f } : null;
@@ -217,7 +233,7 @@ namespace UnityEngine
     {
         public static Camera[] allCameras { get { return new Camera[0]; } }
         public bool orthographic, useOcclusionCulling, allowHDR, allowMSAA; public float orthographicSize, nearClipPlane, farClipPlane, fieldOfView, depth;
-        public CameraClearFlags clearFlags; public Color backgroundColor; public int cullingMask = -1;
+        public CameraClearFlags clearFlags; public Color backgroundColor; public int cullingMask = -1; public RenderTexture targetTexture; public void Render() { }
     }
     public enum LightType { Spot, Directional, Point }
     public enum LightShadows { None, Hard, Soft }
@@ -238,11 +254,11 @@ namespace UnityEngine
         public static bool GetKeyDown(KeyCode k) { return false; } public static bool GetKey(KeyCode k) { return false; }
     }
     public static class Screen { public static int width, height; public static Rect safeArea; }
-    public static class Time { public static float unscaledDeltaTime = 1 / 60f; }
+    public static class Time { public static float unscaledDeltaTime = 1 / 60f; public static int frameCount; }
     public static class Application { public static int targetFrameRate; }
     public static class QualitySettings { public static int vSyncCount; }
     public static class Random { static readonly System.Random r = new System.Random(1); public static float value { get { return (float)r.NextDouble(); } } }
-    public static class Debug { public static void Log(object o) { } }
+    public static class Debug { public static void Log(object o) { } public static void LogWarning(object o) { System.Console.Error.WriteLine("warning: " + o); } }
     public enum RuntimeInitializeLoadType { AfterSceneLoad, BeforeSceneLoad }
     [System.AttributeUsage(System.AttributeTargets.Method)] public sealed class RuntimeInitializeOnLoadMethodAttribute : System.Attribute { public RuntimeInitializeOnLoadMethodAttribute(RuntimeInitializeLoadType t) { } }
 }

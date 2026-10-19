@@ -37,6 +37,7 @@ namespace Pit.Core
             int dmg = System.Math.Max(1, M.Ceil(raw / Ddm));
             e.Hp -= dmg; e.Flash = 0.08f;
             Stats.Dmg += dmg;
+            if (dmg > Stats.BestHit) Stats.BestHit = dmg;
             if (!quiet) Text(e.Cx + (R.Next() - 0.5f) * 0.4f, e.Y + e.H * 0.4f, dmg.ToString(), crit ? 0xffe14du : color, crit ? 1.4f : 1);
             if (e.Boss) BossShed(e);
             if (e.Brain != null && e.Hp > 0) e.Brain.OnDamaged(e, dmg);

@@ -100,7 +100,8 @@ namespace Pit.Game
             return hit;
         }
 
-        bool IsHeld(string id, int data) { return Down && pressId == id && pressData == data; }
+        public bool Held(string id, int data = 0) { return Down && pressId == id && pressData == data; }
+        bool IsHeld(string id, int data) { return Held(id, data); }
 
         // ------------------------------------------------------------ widgets
         public bool Button(string id, float x, float y, float w, float h, string label, bool accent = false, bool disabled = false,

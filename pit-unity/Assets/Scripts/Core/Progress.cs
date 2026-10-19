@@ -120,7 +120,7 @@ namespace Pit.Core
         public bool RerollLevel()
         {
             if (Menu == null || Gold < RerollCost) return false;
-            Gold -= RerollCost; Rerolls++;
+            Stats.GoldSpent += RerollCost; Gold -= RerollCost; Rerolls++;
             Menu.Options = RollLevelOptions();
             return true;
         }
