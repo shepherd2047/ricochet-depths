@@ -617,12 +617,13 @@ def mod_window_pier():
     b.face([(-wx, 0.0, z0), (-wx, rec, z0), (wx, rec, z0), (wx, 0.0, z0)], "glow", (0, 0, 1))
     b.face([(-wx, 0.0, z0), (-wx, 0.0, z1), (-wx, rec, z1), (-wx, rec, z0)], "glow", (1, 0, 0))
     b.face([(wx, 0.0, z0), (wx, rec, z0), (wx, rec, z1), (wx, 0.0, z1)], "glow", (-1, 0, 0))
-    # warm light pool on the lane floor under the window (additive fan, alpha 0 at the rim), off the board
-    cx, cy, rx, ry, n, pz = -0.3, -0.55, 1.15, 0.48, 12, 0.05   # pz above the raised floor slabs
+    # warm light pool where the window's light lands: past the kerb on the board's edge column, clear of the
+    # lane props that would hide it (additive fan, alpha 0 at the rim)
+    cx, cy, rx, ry, n, pz = -0.2, -1.4, 0.8, 0.62, 12, 0.16   # pz just above the kerb top, so it drapes over it
     rim = [(cx + rx * math.cos(2 * math.pi * i / n), cy + ry * math.sin(2 * math.pi * i / n), pz) for i in range(n)]
     for i in range(n):
         b.face([(cx, cy, pz), rim[i], rim[(i + 1) % n]], BEAM_REG, (0, 0, 1))
-    b.beam_alpha = lambda co: max(0.0, 0.42 * (1 - math.hypot((co.x - cx) / rx, (co.y - cy) / ry)))
+    b.beam_alpha = lambda co: max(0.0, 0.36 * (1 - math.hypot((co.x - cx) / rx, (co.y - cy) / ry)))
     return b
 
 

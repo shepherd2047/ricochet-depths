@@ -1,7 +1,7 @@
 # Theme 1 corridor kit: assembly guide for the Unity implementer
 
 The pit is an endless treadmill corridor (spec.md §1.3a, style.md §1):
-- There is no ceiling and no far wall. The far end dissolves into fog.
+- There is no ceiling and no visible far wall. The invisible far wall is the board's top edge (spec §4.4); past it the corridor darkens into fog.
 - The floor and both side walls scroll toward the player at 1 cell per turn and recycle in groups of 4 rows.
 - The wall look moves from the town-side upper foundry (start), through the foundry proper (mid), to the approach to the boss lair (end).
 - A casting-pit gate scrolls in out of the fog before the final boss and stops just beyond the board.
@@ -66,7 +66,7 @@ LIGHTING.md has positions and fog for each size.
   - Lane pieces share the wall segment's origin and rotation; place them on the same transform.
 - **Window piers:** `T1_Start_B`, `T1_Mid_A` and `T1_End_A` each have a tall pier (6.3) with a pointed-arch window.
   - The pane, sill and reveals glow warm through the atlas emission map.
-  - A soft additive pool of window light lies on the lane floor below.
+  - A soft additive pool of window light lies over the kerb and the board's edge column below, clear of the lane props.
   - These three pieces have **2 materials**: slot 0 = `T1_Scenery`, slot 1 = `T1_Beam` (the light pool).
 - **Wall relief (reads from the 30° camera):**
   - The brick panels sit 0.16 behind the collision line.
@@ -128,7 +128,7 @@ Make the left segment, right segment and floor strip children of one `Group` obj
   - In endless mode it resumes at 1 cell per turn.
   - Mid-run bosses don't stop it.
 - A group with absolute index `G` (an integer that never changes while the group lives) sits at screen slot `g = G − scroll/4`. Its centre is `z = (4G + 1.5 − scroll) × 1.125`.
-- **Recycling:** when a group has fully passed below the near end (`4G + 3 − scroll < −16`), set `G += 9`, which moves it 40.5 units to the far end, and **redraw it**: pick new segments and a new floor strip for the new G. The far end is deep in fog (fully fogged from k ≈ 12 at 7×9), so the swap is never seen.
+- **Recycling:** when a group has fully passed below the near end (`4G + 3 − scroll < −16`), set `G += 9`, which moves it 40.5 units to the far end, and **redraw it**: pick new segments and a new floor strip for the new G. The last live group (z 18…22.5) is at fog 0.8 → 1 (LIGHTING.md), so the swap is never seen.
 - Use absolute `G` in every hash, not the screen slot, so a group keeps its look while it scrolls. (`assemble.py` renders one frozen moment, so there G = g.)
 
 ### 4.3 Which set a group uses (progress)
@@ -181,11 +181,11 @@ Collision walls stay in game code (2D), at the same x values as the wall faces.
 - Worst case, at 13×15 with all heavy end segments: 18 segments × about 1400 + 18 lanes × about 900 + 9 × 1200 floor + 1424 gate ≈ **53k verts**.
 - Typical: about 15–20k.
 - One material, so batching is easy. Static batching does not survive moving groups. Use the SRP Batcher (default in URP) or GPU instancing on the shared material. The pieces are linked duplicates of 9 + 8 + 2 meshes.
-- Optional: disable groups with k > rows/2 + 12; they are fully fogged.
+- Don't cull groups past the line: they are fogged to 0.8, not erased, until z 18.
 
 ## 5. Material and atlas
 - **One material for every piece: `T1_Scenery`.** The three window segments add `T1_Beam` as a second slot.
-  - `T1_Beam`: URP Particles/Unlit, Surface Transparent, Blend **Additive**, Color Mode Multiply with vertex colour (alpha 0.42 at the centre of the pool, 0 at the rim), colour #E8A456. Fog on.
+  - `T1_Beam`: URP Particles/Unlit, Surface Transparent, Blend **Additive**, Color Mode Multiply with vertex colour (alpha 0.36 at the centre of the pool, 0 at the rim), colour #E8A456. Alpha × (1 − pit fog factor), see LIGHTING.md.
   - Shader: URP/Lit (or Simple Lit). Base Map = `textures/T1_Scenery_Atlas.png`, colour white.
   - Metallic 0, Smoothness 0.1, no normal map. GPU Instancing on.
   - **Emission on:** Emission Map = `textures/T1_Scenery_Emit.png` (black except the window-pane square), colour white, HDR intensity about +1. Only the window panes light up, and they may bloom a little.

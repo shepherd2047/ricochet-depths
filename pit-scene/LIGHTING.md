@@ -16,24 +16,46 @@ Frame: the board stands in Unity's XY plane and the camera looks along +Z. Piece
 
 Fitted values (PitRoot-local; z runs along the pit, y is height above the floor):
 
-| Board | Look-at z | Distance along view axis | Distance to board centre | Camera position (x, y, z) | Fog start / end |
-|---|---|---|---|---|---|
-| 7×9 | −0.87 | **18.39** | 18.96 | (0, 14.09, −12.69) | 20.4 / 32.4 |
-| 9×11 | −1.08 | 22.12 | 22.83 | (0, 16.94, −15.30) | 24.1 / 36.1 |
-| 11×13 | −1.29 | 25.85 | 26.69 | (0, 19.80, −17.90) | 27.8 / 39.8 |
-| 13×15 | −1.50 | **29.57** | 30.56 | (0, 22.66, −20.51) | 31.6 / 43.6 |
+| Board | Look-at z | Distance along view axis | Distance to board centre | Camera position (x, y, z) |
+|---|---|---|---|---|
+| 7×9 | −0.87 | **18.39** | 18.96 | (0, 14.09, −12.69) |
+| 9×11 | −1.08 | 22.12 | 22.83 | (0, 16.94, −15.30) |
+| 11×13 | −1.29 | 25.85 | 26.69 | (0, 19.80, −17.90) |
+| 13×15 | −1.50 | **29.57** | 30.56 | (0, 22.66, −20.51) |
 
 `fit_camera()` in `tools/assemble.py` (defaults `--tilt 40 --margin 1.5 --fov 65`) solves this for any board size. At margin 1.5 the near rows show the whole lane plus the foot of the wall.
 
-## Fog
+## Fog (pit-axis fog from the far-wall line; replaces the camera-distance fog, 2026-10-19)
+spec §4.4 as changed in 309ff06 says the invisible far wall sits at the **far edge of the board's top row**: z_line = rows/2 × 1.125 (PitRoot-local z, measured from the board centre). Everything beyond that line must read as "distance": clearly darker, not erased.
+
+Unity's built-in fog can't do this. Linear/exp fog runs on view depth, so:
+- it never caps below 1;
+- it fogs the tall walls beside the line far less than the floor. At 40° tilt the top of a 6-unit wall is 4.6 units closer in depth than its foot.
+
+So: **turn the built-in fog off** (Lighting → Environment → Fog unchecked) and fog in the shader by PitRoot-local z. It doesn't depend on height or camera distance.
+
 | Setting | Value |
 |---|---|
-| Mode | Linear |
-| Colour | **#262937** (38, 41, 55) |
-| Start / end | **camera distance (to the look-at point) + 2 / + 14**: see the camera table (7×9 → **20.4 / 32.4**; 13×15 → **31.6 / 43.6**) |
-| On board expansion | Tween start and end together with the camera pull-back (3 s) |
+| Colour | **#262937** (38, 41, 55), the same as the camera clear |
+| Input | `dz = z_local − z_line`, where z_local is the fragment's PitRoot-local z (along the pit). Pass `_PitFarZ = z_line` as a global shader float. |
+| Factor | `f = 0.45 × smoothstep(0, 1.125, dz) + 0.35 × saturate((dz − 1.125) / 9) + 0.20 × saturate((z_local − 18) / 4.5)` |
+| Meaning | 0 on the board. 0.45 within the first cell past the line (the "this is where the pit ends" drop). Rises to 0.8 over the next 9 units. The last term takes the last live group (z 18 … 22.5, fixed, the treadmill's end) to 1, so the recycling cut never shows. |
+| Apply | `colour = lerp(lit colour incl. emission, fog colour, f)` in `T1_Scenery`. In `T1_Beam`, multiply the alpha by `(1 − f)`. |
+| On board expansion | Tween `_PitFarZ` with the camera pull-back (3 s). The last term doesn't move. |
 
-style.md §3 still says 30/50. With the pitched camera at 19–31 units, 30/50 fogs nothing at 7×9 and half the board at 13×15. Offsets that follow the camera keep the board clear and dissolve the far trench at every size.
+Numbers per board (PitRoot-local z):
+
+| Board | z_line (far wall) | f = 0.45 at | f = 0.8 at | Gate front when docked (z_line + 3.375) | f at the gate front |
+|---|---|---|---|---|---|
+| 7×9 | **5.06** | 6.19 | 15.19 | 8.44 | 0.54 |
+| 9×11 | **6.19** | 7.31 | 16.31 | 9.56 | 0.54 |
+| 11×13 | **7.31** | 8.44 | 17.44 | 10.69 | 0.54 |
+| 13×15 | **8.44** | 9.56 | 18.56 | 11.81 | 0.54 |
+
+All sizes reach f = 1 at z = 22.5. The gate always docks 3 cells past the line, so it always sits at about 54 % fog. It reads as a dark arch with chains against the fog colour (`preview/t1_corridor_13x15_final.png`).
+
+- **Units beyond the line:** new waves placed above the top row (spec §1.3 step 3) sit in this fog too, if their shader uses the same factor. Then they "emerge from the distance" as they roll over the line. That call belongs to the main/UI side. Balls never pass the line.
+- **Fallback:** if a custom fog isn't possible, use built-in linear fog on view depth. Start = camera distance along the view axis + (z_line − look-at z) × sin 40°, which puts the line on the floor exactly. End = start + 5. The walls past the line will then stay brighter than the floor, and the far cut must be hidden by disabling groups at z > 18.
 
 ## Ambient (Environment Lighting → Source: Gradient)
 | | sRGB | Hex |
@@ -77,14 +99,14 @@ A yaw of 10–20° would light one wall, but that wall then throws a shadow abou
 - The floor albedo is V 26–31 % (style.md §4 as ruled 2026-10-19: main scenery colours V 25–33 %, ceiling 33 %). Lit, it reads lighter than the walls and darker than every unit.
 
 ## Corridor depth and the gate
-- No ceiling and no far wall. The linear fog above ends the corridor: at 7×9 it is fully fogged from about k = 12, and the live run reaches k = 19.
-- The end-of-corridor gate sits 3 cells past the board's far row on the final boss turn, in the fog's first third. It reads as a dim arch with hanging chains.
+- No ceiling. The far wall is invisible, at the board's top edge (spec §4.4). Past it the pit-axis fog above darkens the corridor to 0.8 and reaches 1 only at the treadmill's end (z 22.5, k = 20).
+- The end-of-corridor gate sits 3 cells past the board's far row on the final boss turn, at fog 0.54. It reads as a dark arch with hanging chains.
 - **Gate renderers: Cast Shadows Off.** The key light runs along the corridor, so the lintel would throw a shadow band across the whole board.
 - The copper spot stays put as the corridor scrolls. It lights whatever segment passes, so it needs no animation.
 
 ## Windows (Theme 1 furnace glow, added 2026-10-19 at the user's request)
 - Three wall segments have a pier with a pointed-arch window. The pane, sill and reveals emit warm #E8A456 through `T1_Scenery_Emit.png` (Unity: emission colour white, HDR intensity about +1).
-- Below each window is an additive pool of light on the lane floor (`T1_Beam`, alpha 0.42 → 0). It is a mesh, not a real light, so it costs nothing.
+- Below each window is an additive pool of light (`T1_Beam`, alpha 0.36 → 0). It lies where the light would land: over the kerb and the board's edge column, clear of the lane props (it used to sit on the lane floor, where the props hid it). It is a mesh, not a real light, so it costs nothing, and it is too faint to read as a gameplay marker.
 - The copper spot stays as it is. The windows read as its source.
 
 ## Not in this scene (on purpose)

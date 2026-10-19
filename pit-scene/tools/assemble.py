@@ -44,7 +44,7 @@ WALL_FILL_RGB = (150, 172, 190)   # cool grey-blue
 WALL_FILL_INT = 0.8               # Unity intensity, each
 WALL_FILL_TILT = 80               # deg from straight down toward the lit wall (L light rakes the left wall)
 FIT_MARGIN = 1.5                  # cells of wall shown beside the near row's outer columns (--margin)
-FOG_START_OFF, FOG_END_OFF = 2.0, 14.0   # fog start/end = camera-to-board distance + these
+FOG_STEP, FOG_CAP, FOG_RAMP = 0.45, 0.8, 9.0   # pit-axis fog past the far-wall line, see fog_factor()
 
 
 def srgb_to_lin(c):
@@ -173,36 +173,60 @@ def layout_corridor(cols, rows, turn, final, seed, coll, balls=False):
     return count
 
 
-def add_fog_to_material(cam_dist):
+def fog_factor(nt, y_line):
+    """Pit-axis fog (LIGHTING.md, spec section 4.4 as changed 2026-10-19): 0 on the board, FOG_STEP within the
+    first cell past the far-wall line (smoothstep), then linear up to FOG_CAP over FOG_RAMP more units, and to 1
+    over the last live group so the treadmill's cut never shows. Height independent; the corridor and the gate
+    beyond the line stay readable as 'distance'."""
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    nt.links.new(geo.outputs["Position"], sep.inputs[0])
+    a = nt.nodes.new("ShaderNodeMapRange")
+    a.interpolation_type = "SMOOTHSTEP"
+    a.inputs["From Min"].default_value, a.inputs["From Max"].default_value = y_line, y_line + CELL
+    a.inputs["To Min"].default_value, a.inputs["To Max"].default_value = 0.0, FOG_STEP
+    b = nt.nodes.new("ShaderNodeMapRange")
+    b.inputs["From Min"].default_value, b.inputs["From Max"].default_value = y_line + CELL, y_line + CELL + FOG_RAMP
+    b.inputs["To Min"].default_value, b.inputs["To Max"].default_value = 0.0, FOG_CAP - FOG_STEP
+    for n in (a, b):
+        n.clamp = True
+        nt.links.new(sep.outputs["Y"], n.inputs["Value"])
+    c = nt.nodes.new("ShaderNodeMapRange")     # last group before the treadmill's end: close to 1, hides the cut
+    y_end = (G_MAX + 1) * GROUP * CELL
+    c.inputs["From Min"].default_value, c.inputs["From Max"].default_value = y_end - GROUP * CELL, y_end
+    c.inputs["To Min"].default_value, c.inputs["To Max"].default_value = 0.0, 1.0 - FOG_CAP
+    c.clamp = True
+    nt.links.new(sep.outputs["Y"], c.inputs["Value"])
+    add = nt.nodes.new("ShaderNodeMath")
+    nt.links.new(a.outputs["Result"], add.inputs[0])
+    nt.links.new(b.outputs["Result"], add.inputs[1])
+    add2 = nt.nodes.new("ShaderNodeMath")
+    nt.links.new(add.outputs[0], add2.inputs[0])
+    nt.links.new(c.outputs["Result"], add2.inputs[1])
+    return add2.outputs[0]
+
+
+def add_fog_to_material(rows):
+    y_line = rows / 2 * CELL      # far-wall line = far edge of the board's top row
     m = bpy.data.materials["T1_Scenery"]
     nt = m.node_tree
     out = next(n for n in nt.nodes if n.type == "OUTPUT_MATERIAL")
     bsdf = nt.nodes.get("Principled BSDF")
-    camd = nt.nodes.new("ShaderNodeCameraData")
-    mr = nt.nodes.new("ShaderNodeMapRange")
-    mr.inputs["From Min"].default_value = cam_dist + FOG_START_OFF
-    mr.inputs["From Max"].default_value = cam_dist + FOG_END_OFF
-    mr.clamp = True
     em = nt.nodes.new("ShaderNodeEmission")
     em.inputs["Color"].default_value = lin(FOG_RGB)
     mix = nt.nodes.new("ShaderNodeMixShader")
-    nt.links.new(camd.outputs["View Distance"], mr.inputs["Value"])
-    nt.links.new(mr.outputs["Result"], mix.inputs["Fac"])
+    nt.links.new(fog_factor(nt, y_line), mix.inputs["Fac"])
     nt.links.new(bsdf.outputs[0], mix.inputs[1])
     nt.links.new(em.outputs[0], mix.inputs[2])
     nt.links.new(mix.outputs[0], out.inputs["Surface"])
-    bm_ = bpy.data.materials.get("T1_Beam")    # the light shaft fades with the same fog factor
+    bm_ = bpy.data.materials.get("T1_Beam")    # the light pools fade with the same fog factor
     if bm_:
         bt = bm_.node_tree
         mul = next(n for n in bt.nodes if n.type == "MATH")
-        camd2 = bt.nodes.new("ShaderNodeCameraData")
-        mr2 = bt.nodes.new("ShaderNodeMapRange")
-        mr2.inputs["From Min"].default_value = cam_dist + FOG_START_OFF
-        mr2.inputs["From Max"].default_value = cam_dist + FOG_END_OFF
-        mr2.inputs["To Min"].default_value, mr2.inputs["To Max"].default_value = 1.2, 0.0
-        mr2.clamp = True
-        bt.links.new(camd2.outputs["View Distance"], mr2.inputs["Value"])
-        bt.links.new(mr2.outputs["Result"], mul.inputs[1])
+        inv = bt.nodes.new("ShaderNodeMapRange")
+        inv.inputs["To Min"].default_value, inv.inputs["To Max"].default_value = 1.2, 0.0
+        bt.links.new(fog_factor(bt, y_line), inv.inputs["Value"])
+        bt.links.new(inv.outputs["Result"], mul.inputs[1])
 
 
 def world_trilight():
@@ -391,12 +415,12 @@ def main():
     sc.collection.children.link(coll)
     count = layout_corridor(a.cols, a.rows, a.turn, a.final, a.seed, coll, a.balls)
     dist = camera(a.cols, a.rows, a.tilt, a.fov)
-    add_fog_to_material(dist)
+    add_fog_to_material(a.rows)
     world_trilight()
     lights(a.cols, a.rows)
     render_setup(a.out, a.res)
     bpy.ops.render.render(write_still=True)
-    print("ASSEMBLE", a.cols, a.rows, "cam_dist %.2f fog %.1f-%.1f" % (dist, dist + FOG_START_OFF, dist + FOG_END_OFF), count)
+    print("ASSEMBLE", a.cols, a.rows, "cam_dist %.2f fog line y %.2f" % (dist, a.rows / 2 * CELL), count)
 
 
 if __name__ == "__main__":

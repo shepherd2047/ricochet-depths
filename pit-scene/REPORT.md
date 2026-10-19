@@ -31,7 +31,7 @@ Clean room: I read only `ballpit-spec/style.md`, `ballpit-spec/spec.md` §0–1,
 1. **Camera: resolved 2026-10-19.** The user ruled for the 30° downward camera (style.md §2 updated). The previews were re-rendered from it.
    - I read "about 30° down" as 30° away from looking straight down, which matches the approved concept.
    - The fit is driven by the near row, because perspective makes it the widest row on screen. The 7×9 board with half-cell margins needs about 15 units at FOV 65°; style.md says 10–12. The trade-off is in LIGHTING.md, and analysis should pick one.
-2. **Fog values differ from style.md** (30/50 there). With the pitched camera I use camera distance + 2 / + 14 (16.7/28.7 at 7×9, 27.5/39.5 at 13×15), tweened with the pull-back.
+2. **Fog differs from style.md** (linear 30/50 there). Since spec §4.4 (309ff06) the fog is a pit-axis fog. It starts at the far-wall line (the board's top edge), is 0.45 one cell later, 0.8 nine units after that, and 1 only at the treadmill's end. Unity's built-in fog is off. Values per board are in LIGHTING.md.
 3. **Left wall is dark.** The key light runs parallel to the wall faces, so only the copper spot lights a wall (the right one), and the left wall gets ambient only.
    - Giving the key a yaw lights the left wall, but it throws a wall shadow about 1 cell wide onto the board, so I didn't.
 4. **Corridor rules I chose (spec §1.3a leaves them open):**
@@ -64,6 +64,8 @@ Clean room: I read only `ballpit-spec/style.md`, `ballpit-spec/spec.md` §0–1,
    - Camera tilt 40°, fit margin 1.5 cells (the lane plus half a cell of wall; updated from 1.0): 7×9 at 19.0 units from the board centre, 13×15 at 30.6.
    - Scenery main colours at V 25–33 %. Brick, stone and floor now sit at V 25–31 %; brick highlights are clamped at 33 %.
    - Previews re-rendered.
+
+10. **Follow-ups from the Unity integration (2026-10-19):** the window light pools moved out of the lane onto the kerb and board edge, where the props no longer hide them. The fog now follows spec §4.4: the board is clear, the corridor past the far-wall line is darker but not erased, and the docked gate is a silhouette at fog 0.54.
 
 ## Proposals for art-bible.md (not applied)
 - §3 Theme 1 emissive: allow window panes as a light source (applied in the kit at the user's request). Also: add "optional cool fill (#5A6B78, point light, low intensity, near end, no shadows), so the wall opposite the furnace reads". This is the only way I see to light both walls without a board shadow.
