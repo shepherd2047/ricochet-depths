@@ -10,7 +10,7 @@ Frame: the board stands in Unity's XY plane and the camera looks along +Z. Piece
 | Projection | Perspective, vertical FOV **65°** |
 | Clear | Solid colour **#262937** (38, 41, 55), the same as the fog |
 | Pitch | **40° from looking straight down at the board**, tipped toward the far end: the camera sits behind and above the player. In Unity's XY board frame that is camera rotation **Euler (−40, 0, 0)**. The board stays a flat 2D plane. |
-| Fit | Under perspective the **near row** is the widest row on screen, so it is the binding constraint. Fit the near row's corners plus **1.0 cell each side** (the prop lane) to the screen width. Centre the board vertically on screen. |
+| Fit | Under perspective the **near row** is the widest row on screen, so it is the binding constraint. Fit the near row's corners plus **1.5 cells each side** (the prop lane plus half a cell of wall) to the screen width. Centre the board vertically on screen. |
 | Clip | Near 0.3, far 1000 |
 | Bloom / HDR | Bloom on, threshold about 1.0 (linear). Scenery albedo never exceeds V 33 %, so only balls, VFX, enemy eyes and (slightly) the window panes bloom. |
 
@@ -18,22 +18,22 @@ Fitted values (PitRoot-local; z runs along the pit, y is height above the floor)
 
 | Board | Look-at z | Distance along view axis | Distance to board centre | Camera position (x, y, z) | Fog start / end |
 |---|---|---|---|---|---|
-| 7×9 | −0.95 | **16.77** | 17.40 | (0, 12.85, −11.73) | 18.8 / 30.8 |
-| 9×11 | −1.16 | 20.50 | 21.26 | (0, 15.70, −14.34) | 22.5 / 34.5 |
-| 11×13 | −1.37 | 24.23 | 25.13 | (0, 18.56, −16.94) | 26.2 / 38.2 |
-| 13×15 | −1.58 | **27.95** | 28.99 | (0, 21.41, −19.55) | 30.0 / 42.0 |
+| 7×9 | −0.87 | **18.39** | 18.96 | (0, 14.09, −12.69) | 20.4 / 32.4 |
+| 9×11 | −1.08 | 22.12 | 22.83 | (0, 16.94, −15.30) | 24.1 / 36.1 |
+| 11×13 | −1.29 | 25.85 | 26.69 | (0, 19.80, −17.90) | 27.8 / 39.8 |
+| 13×15 | −1.50 | **29.57** | 30.56 | (0, 22.66, −20.51) | 31.6 / 43.6 |
 
-`fit_camera()` in `tools/assemble.py` (defaults `--tilt 40 --margin 1.0 --fov 65`) solves this for any board size. At margin 1.0 the near rows show the lane fully, and the wall starts just at the screen edge. The wall comes into view further up the screen.
+`fit_camera()` in `tools/assemble.py` (defaults `--tilt 40 --margin 1.5 --fov 65`) solves this for any board size. At margin 1.5 the near rows show the whole lane plus the foot of the wall.
 
 ## Fog
 | Setting | Value |
 |---|---|
 | Mode | Linear |
 | Colour | **#262937** (38, 41, 55) |
-| Start / end | **camera distance (to the look-at point) + 2 / + 14**: see the camera table (7×9 → **18.8 / 30.8**; 13×15 → **30.0 / 42.0**) |
+| Start / end | **camera distance (to the look-at point) + 2 / + 14**: see the camera table (7×9 → **20.4 / 32.4**; 13×15 → **31.6 / 43.6**) |
 | On board expansion | Tween start and end together with the camera pull-back (3 s) |
 
-style.md §3 still says 30/50. With the pitched camera at 17–28 units, 30/50 fogs nothing at 7×9 and half the board at 13×15. Offsets that follow the camera keep the board clear and dissolve the far trench at every size.
+style.md §3 still says 30/50. With the pitched camera at 19–31 units, 30/50 fogs nothing at 7×9 and half the board at 13×15. Offsets that follow the camera keep the board clear and dissolve the far trench at every size.
 
 ## Ambient (Environment Lighting → Source: Gradient)
 | | sRGB | Hex |
@@ -48,7 +48,7 @@ Intensity multiplier 1. No skybox and no reflection probe: set Environment Refle
 |---|---|
 | Type | Directional, white #FFFFFF, intensity **1** |
 | Rotation | Euler **(10, 0, 0)** in Unity world: it shines almost straight into the screen, tipped 10° downward (toward the player end) |
-| Shadows | Soft. Strength 0.8, distance **45**: at 13×15 the camera is 29 away. Main light only. |
+| Shadows | Soft. Strength 0.8, distance **45**: at 13×15 the camera is 30.6 away. Main light only. |
 
 Inner wall faces lie parallel to this light, so they get almost no direct light from it. The wall fill below lights them, so the walls still stay a little darker than the board.
 

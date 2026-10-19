@@ -43,7 +43,7 @@ KEY_YAW = 0.0    # deg; style.md key (10 deg off the view axis, no yaw). A yaw >
 WALL_FILL_RGB = (150, 172, 190)   # cool grey-blue
 WALL_FILL_INT = 0.8               # Unity intensity, each
 WALL_FILL_TILT = 80               # deg from straight down toward the lit wall (L light rakes the left wall)
-FIT_MARGIN = 1.0                  # cells of wall shown beside the near row's outer columns (--margin)
+FIT_MARGIN = 1.5                  # cells of wall shown beside the near row's outer columns (--margin)
 FOG_START_OFF, FOG_END_OFF = 2.0, 14.0   # fog start/end = camera-to-board distance + these
 
 
@@ -66,7 +66,7 @@ def args():
     ap.add_argument("--seed", type=int, default=12345)
     ap.add_argument("--tilt", type=float, default=40.0)   # style.md section 2 as ruled 2026-10-19 (second ruling)
     ap.add_argument("--fov", type=float, default=65.0)
-    ap.add_argument("--margin", type=float, default=1.0)   # cells beside the near row: the prop lane (ruled 2026-10-19)
+    ap.add_argument("--margin", type=float, default=1.5)   # cells beside the near row: prop lane + half a cell of wall (ruled 2026-10-19)
     ap.add_argument("--balls", action="store_true")
     ap.add_argument("--kitsheet", action="store_true")
     ap.add_argument("--out", required=True)

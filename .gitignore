@@ -32,3 +32,6 @@ pit-unity/*.sln
 pit-unity/*.slnx
 
 .DS_Store
+
+# Blender auto-backups
+*.blend1
