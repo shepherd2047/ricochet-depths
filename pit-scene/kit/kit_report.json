@@ -1,0 +1,134 @@
+{
+  "T1_Wall_BrickA": {
+    "kind": "wall",
+    "unity_verts": 28,
+    "tris": 14,
+    "size_xyz_blender": [
+      1.125,
+      0.97,
+      4.7
+    ],
+    "budget_ok": true
+  },
+  "T1_Wall_BrickB": {
+    "kind": "wall",
+    "unity_verts": 88,
+    "tris": 44,
+    "size_xyz_blender": [
+      1.125,
+      0.97,
+      4.86
+    ],
+    "budget_ok": true
+  },
+  "T1_Wall_IronRib": {
+    "kind": "wall",
+    "unity_verts": 472,
+    "tris": 236,
+    "size_xyz_blender": [
+      1.125,
+      0.97,
+      4.7
+    ],
+    "budget_ok": true
+  },
+  "T1_Wall_Chain": {
+    "kind": "wall",
+    "unity_verts": 1710,
+    "tris": 856,
+    "size_xyz_blender": [
+      1.125,
+      0.97,
+      4.7
+    ],
+    "budget_ok": true
+  },
+  "T1_Wall_Mould": {
+    "kind": "wall",
+    "unity_verts": 406,
+    "tris": 204,
+    "size_xyz_blender": [
+      1.125,
+      0.97,
+      4.7
+    ],
+    "budget_ok": true
+  },
+  "T1_Wall_Trough": {
+    "kind": "wall",
+    "unity_verts": 158,
+    "tris": 82,
+    "size_xyz_blender": [
+      1.125,
+      0.97,
+      4.7
+    ],
+    "budget_ok": true
+  },
+  "T1_Pillar": {
+    "kind": "wall",
+    "unity_verts": 156,
+    "tris": 82,
+    "size_xyz_blender": [
+      1.245,
+      1.34,
+      5.15
+    ],
+    "budget_ok": true
+  },
+  "T1_Floor_A": {
+    "kind": "floor",
+    "unity_verts": 4,
+    "tris": 2,
+    "size_xyz_blender": [
+      1.125,
+      1.125,
+      0.0
+    ],
+    "budget_ok": true
+  },
+  "T1_Floor_B": {
+    "kind": "floor",
+    "unity_verts": 4,
+    "tris": 2,
+    "size_xyz_blender": [
+      1.125,
+      1.125,
+      0.0
+    ],
+    "budget_ok": true
+  },
+  "T1_Prop_Hook": {
+    "kind": "prop",
+    "unity_verts": 320,
+    "tris": 160,
+    "size_xyz_blender": [
+      0.484,
+      0.12,
+      1.04
+    ],
+    "budget_ok": true
+  },
+  "T1_Prop_BellShard": {
+    "kind": "prop",
+    "unity_verts": 192,
+    "tris": 96,
+    "size_xyz_blender": [
+      1.115,
+      0.516,
+      1.208
+    ],
+    "budget_ok": true
+  },
+  "T1_Prop_Ladle": {
+    "kind": "prop",
+    "unity_verts": 270,
+    "tris": 150,
+    "size_xyz_blender": [
+      1.21,
+      0.497,
+      1.62
+    ],
+    "budget_ok": true
+  }
+}

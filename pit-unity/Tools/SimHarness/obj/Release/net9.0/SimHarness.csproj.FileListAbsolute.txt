@@ -1,0 +1,14 @@
+/Users/m/projects/new/pit-unity/Tools/SimHarness/bin/Release/net9.0/SimHarness
+/Users/m/projects/new/pit-unity/Tools/SimHarness/bin/Release/net9.0/SimHarness.deps.json
+/Users/m/projects/new/pit-unity/Tools/SimHarness/bin/Release/net9.0/SimHarness.runtimeconfig.json
+/Users/m/projects/new/pit-unity/Tools/SimHarness/bin/Release/net9.0/SimHarness.dll
+/Users/m/projects/new/pit-unity/Tools/SimHarness/bin/Release/net9.0/SimHarness.pdb
+/Users/m/projects/new/pit-unity/Tools/SimHarness/obj/Release/net9.0/SimHarness.GeneratedMSBuildEditorConfig.editorconfig
+/Users/m/projects/new/pit-unity/Tools/SimHarness/obj/Release/net9.0/SimHarness.AssemblyInfoInputs.cache
+/Users/m/projects/new/pit-unity/Tools/SimHarness/obj/Release/net9.0/SimHarness.AssemblyInfo.cs
+/Users/m/projects/new/pit-unity/Tools/SimHarness/obj/Release/net9.0/SimHarness.csproj.CoreCompileInputs.cache
+/Users/m/projects/new/pit-unity/Tools/SimHarness/obj/Release/net9.0/SimHarness.dll
+/Users/m/projects/new/pit-unity/Tools/SimHarness/obj/Release/net9.0/refint/SimHarness.dll
+/Users/m/projects/new/pit-unity/Tools/SimHarness/obj/Release/net9.0/SimHarness.pdb
+/Users/m/projects/new/pit-unity/Tools/SimHarness/obj/Release/net9.0/SimHarness.genruntimeconfig.cache
+/Users/m/projects/new/pit-unity/Tools/SimHarness/obj/Release/net9.0/ref/SimHarness.dll

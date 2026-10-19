@@ -1,0 +1,34 @@
+# Whitelist: only the clean-room game project is tracked.
+/*
+!/.gitignore
+!/README.md
+!/ballpit-spec/
+!/pit-unity/
+!/pit-art/
+!/pit-scene/
+!/pit-ui/
+!/pit-audio/
+
+# NEVER track the analysis side (decompiled code and extracted assets of the reference game).
+/ballpit-re/
+
+# Tool vendors and environments
+pit-art/tools/vendor/
+**/.venv/
+**/__pycache__/
+**/node_modules/
+
+# Unity generated
+pit-unity/[Ll]ibrary/
+pit-unity/[Tt]emp/
+pit-unity/[Oo]bj/
+pit-unity/[Bb]uild/
+pit-unity/[Bb]uilds/
+pit-unity/[Ll]ogs/
+pit-unity/[Uu]ser[Ss]ettings/
+pit-unity/MemoryCaptures/
+pit-unity/*.csproj
+pit-unity/*.sln
+pit-unity/*.slnx
+
+.DS_Store

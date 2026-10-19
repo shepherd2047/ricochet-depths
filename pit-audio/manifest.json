@@ -1,0 +1,207 @@
+{
+ "sfx": [
+  {
+   "key": "ball_launch",
+   "file": "sfx/ball_launch_1.mp3",
+   "category": "Balls",
+   "dur": 0.16,
+   "bytes": 2268,
+   "loop": false
+  },
+  {
+   "key": "ball_launch",
+   "file": "sfx/ball_launch_2.mp3",
+   "category": "Balls",
+   "dur": 0.16,
+   "bytes": 2268,
+   "loop": false
+  },
+  {
+   "key": "ball_launch",
+   "file": "sfx/ball_launch_3.mp3",
+   "category": "Balls",
+   "dur": 0.16,
+   "bytes": 2268,
+   "loop": false
+  },
+  {
+   "key": "ball_wall",
+   "file": "sfx/ball_wall_1.mp3",
+   "category": "Balls",
+   "dur": 0.08,
+   "bytes": 1800,
+   "loop": false
+  },
+  {
+   "key": "ball_wall",
+   "file": "sfx/ball_wall_2.mp3",
+   "category": "Balls",
+   "dur": 0.08,
+   "bytes": 1836,
+   "loop": false
+  },
+  {
+   "key": "ball_wall",
+   "file": "sfx/ball_wall_3.mp3",
+   "category": "Balls",
+   "dur": 0.08,
+   "bytes": 1800,
+   "loop": false
+  },
+  {
+   "key": "ball_hit",
+   "file": "sfx/ball_hit_1.mp3",
+   "category": "Balls",
+   "dur": 0.13,
+   "bytes": 2160,
+   "loop": false
+  },
+  {
+   "key": "ball_hit",
+   "file": "sfx/ball_hit_2.mp3",
+   "category": "Balls",
+   "dur": 0.13,
+   "bytes": 2160,
+   "loop": false
+  },
+  {
+   "key": "ball_hit",
+   "file": "sfx/ball_hit_3.mp3",
+   "category": "Balls",
+   "dur": 0.13,
+   "bytes": 2160,
+   "loop": false
+  },
+  {
+   "key": "ball_hit",
+   "file": "sfx/ball_hit_4.mp3",
+   "category": "Balls",
+   "dur": 0.13,
+   "bytes": 2160,
+   "loop": false
+  },
+  {
+   "key": "ball_crit",
+   "file": "sfx/ball_crit_1.mp3",
+   "category": "Balls",
+   "dur": 0.4,
+   "bytes": 3636,
+   "loop": false
+  },
+  {
+   "key": "ball_crit",
+   "file": "sfx/ball_crit_2.mp3",
+   "category": "Balls",
+   "dur": 0.4,
+   "bytes": 3564,
+   "loop": false
+  },
+  {
+   "key": "ball_catch",
+   "file": "sfx/ball_catch_1.mp3",
+   "category": "Balls",
+   "dur": 0.18,
+   "bytes": 3132,
+   "loop": false
+  },
+  {
+   "key": "ball_catch",
+   "file": "sfx/ball_catch_2.mp3",
+   "category": "Balls",
+   "dur": 0.18,
+   "bytes": 3276,
+   "loop": false
+  },
+  {
+   "key": "en_death",
+   "file": "sfx/en_death_1.mp3",
+   "category": "Enemies",
+   "dur": 0.42,
+   "bytes": 4644,
+   "loop": false
+  },
+  {
+   "key": "en_death",
+   "file": "sfx/en_death_2.mp3",
+   "category": "Enemies",
+   "dur": 0.42,
+   "bytes": 4824,
+   "loop": false
+  },
+  {
+   "key": "en_death",
+   "file": "sfx/en_death_3.mp3",
+   "category": "Enemies",
+   "dur": 0.42,
+   "bytes": 5364,
+   "loop": false
+  },
+  {
+   "key": "pl_hurt",
+   "file": "sfx/pl_hurt_1.mp3",
+   "category": "Player",
+   "dur": 0.3,
+   "bytes": 3564,
+   "loop": false
+  },
+  {
+   "key": "pl_hurt",
+   "file": "sfx/pl_hurt_2.mp3",
+   "category": "Player",
+   "dur": 0.3,
+   "bytes": 3492,
+   "loop": false
+  },
+  {
+   "key": "pl_levelup",
+   "file": "sfx/pl_levelup_1.mp3",
+   "category": "Player",
+   "dur": 1.0,
+   "bytes": 11088,
+   "loop": false
+  },
+  {
+   "key": "pk_xp",
+   "file": "sfx/pk_xp_1.mp3",
+   "category": "Pickups",
+   "dur": 0.09,
+   "bytes": 1728,
+   "loop": false
+  },
+  {
+   "key": "pk_xp",
+   "file": "sfx/pk_xp_2.mp3",
+   "category": "Pickups",
+   "dur": 0.09,
+   "bytes": 1620,
+   "loop": false
+  },
+  {
+   "key": "pk_xp",
+   "file": "sfx/pk_xp_3.mp3",
+   "category": "Pickups",
+   "dur": 0.09,
+   "bytes": 1656,
+   "loop": false
+  },
+  {
+   "key": "ui_click",
+   "file": "sfx/ui_click_1.mp3",
+   "category": "Board & UI",
+   "dur": 0.05,
+   "bytes": 1800,
+   "loop": false
+  }
+ ],
+ "music": [
+  {
+   "key": "mus_battle_loop",
+   "file": "music/mus_battle_loop.mp3",
+   "category": "Music",
+   "dur": 30.0,
+   "bytes": 814407,
+   "loop": true
+  }
+ ],
+ "total_bytes": 888675
+}

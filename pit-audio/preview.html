@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ricochet Depths Audio</title>
+<style>
+  :root { --bg:#14181d; --panel:#1d232a; --line:#2c343d; --text:#d8dde3; --dim:#8a96a3; --accent:#e6a24a; --accent2:#62d9cf; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  header { position:sticky; top:0; z-index:2; background:rgba(20,24,29,.95); border-bottom:1px solid var(--line); padding:12px 16px; display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; }
+  h1 { font-size:16px; margin:0; letter-spacing:.02em; }
+  .meta { color:var(--dim); font-size:12px; }
+  label { color:var(--dim); font-size:12px; display:flex; align-items:center; gap:6px; }
+  main { max-width:960px; margin:0 auto; padding:8px 16px 48px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin:22px 0 8px; }
+  .row { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; padding:8px 10px; background:var(--panel); border:1px solid var(--line); border-radius:6px; margin-bottom:6px; }
+  .name { font-family:ui-monospace, Menlo, monospace; min-width:150px; flex:1 1 150px; }
+  .info { color:var(--dim); font-size:12px; min-width:110px; }
+  button { background:#27303a; color:var(--text); border:1px solid #3a4550; border-radius:4px; padding:5px 10px; font:inherit; font-size:12px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.on { background:var(--accent); color:#14181d; border-color:var(--accent); }
+  button.demo { border-color:var(--accent2); }
+  .demos { display:flex; flex-wrap:wrap; gap:6px; }
+  #status { color:var(--accent2); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Ricochet Depths: audio audition · batch 1</h1>
+  <span class="meta" id="total"></span>
+  <label>Volume <input id="vol" type="range" min="0" max="1" step="0.01" value="0.8"></label>
+  <label><input id="pitch" type="checkbox" checked> ±3 % random pitch</label>
+  <button id="stop">Stop all</button>
+  <span id="status"></span>
+</header>
+<main>
+  <h2>Quick demos</h2>
+  <div class="demos">
+    <button class="demo" data-demo="salvo">Salvo: 6 balls, bounces, hits</button>
+    <button class="demo" data-demo="xp">XP combo pickup</button>
+    <button class="demo" data-demo="kill">Hit, crit, kill, XP, level-up</button>
+    <button class="demo" data-demo="mixcheck">Battle loop (−6 dB) + SFX on top</button>
+  </div>
+  <div id="list"></div>
+</main>
+<script src="manifest.js"></script>
+<script>
+const M = window.AUDIO_MANIFEST;
+const all = M.sfx.concat(M.music);
+document.getElementById('total').textContent =
+  `${all.length} files · ${(M.total_bytes / 1048576).toFixed(2)} MiB total`;
+
+let ctx, master;
+const buffers = {}, playing = new Set();
+const status = t => document.getElementById('status').textContent = t;
+
+function ensureCtx() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain(); master.gain.value = +document.getElementById('vol').value;
+    master.connect(ctx.destination);
+  }
+  if (ctx.state === 'suspended') ctx.resume();
+}
+async function load(file) {
+  if (buffers[file]) return buffers[file];
+  const res = await fetch(file);
+  const buf = await ctx.decodeAudioData(await res.arrayBuffer());
+  return buffers[file] = buf;
+}
+// Web Audio over http(s); falls back to <audio> elements when opened from file:// (fetch blocked).
+async function play(file, { loop = false, rate = 1, gain = 1, when = 0 } = {}) {
+  ensureCtx();
+  try {
+    const buf = await load(file);
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = loop; src.playbackRate.value = rate;
+    const g = ctx.createGain(); g.gain.value = gain; src.connect(g).connect(master);
+    src.start(ctx.currentTime + when);
+    const h = { stop: () => { try { src.stop(); } catch (e) {} } };
+    playing.add(h); src.onended = () => playing.delete(h);
+    return h;
+  } catch (e) {
+    const a = new Audio(file); a.loop = loop; a.playbackRate = rate; a.preservesPitch = false;
+    a.volume = Math.min(1, gain * master.gain.value);
+    const h = { stop: () => { a.pause(); a.currentTime = 0; } };
+    setTimeout(() => { a.play(); playing.add(h); }, when * 1000);
+    a.onended = () => playing.delete(h);
+    return h;
+  }
+}
+const jitter = (amt = 0.03) => document.getElementById('pitch').checked ? 1 + (Math.random() * 2 - 1) * amt : 1;
+const byKey = {};
+all.forEach(e => (byKey[e.key] = byKey[e.key] || []).push(e));
+const pick = k => byKey[k][Math.floor(Math.random() * byKey[k].length)].file;
+const sfx = (k, opt = {}) => play(pick(k), { rate: jitter(), ...opt });
+
+// list
+const list = document.getElementById('list');
+const cats = [...new Set(all.map(e => e.category))];
+const loops = {};
+for (const cat of cats) {
+  const h = document.createElement('h2'); h.textContent = cat; list.appendChild(h);
+  const keys = [...new Set(all.filter(e => e.category === cat).map(e => e.key))];
+  for (const key of keys) {
+    const vars = byKey[key];
+    const row = document.createElement('div'); row.className = 'row';
+    const kb = vars.reduce((s, v) => s + v.bytes, 0) / 1024;
+    row.innerHTML = `<span class="name">${key}</span><span class="info">${vars[0].dur.toFixed(2)} s · ${vars.length} var · ${kb.toFixed(1)} KB</span>`;
+    if (vars[0].loop) {
+      const b = document.createElement('button'); b.textContent = 'Loop ▶';
+      b.onclick = async () => {
+        if (loops[key]) { loops[key].stop(); delete loops[key]; b.classList.remove('on'); b.textContent = 'Loop ▶'; return; }
+        loops[key] = await play(vars[0].file, { loop: true }); b.classList.add('on'); b.textContent = 'Loop ■';
+      };
+      row.appendChild(b);
+    } else {
+      vars.forEach((v, i) => {
+        const b = document.createElement('button'); b.textContent = vars.length > 1 ? `#${i + 1}` : '▶';
+        b.onclick = () => play(v.file, { rate: jitter() }); row.appendChild(b);
+      });
+      if (vars.length > 1) {
+        const r = document.createElement('button'); r.textContent = 'random ×4';
+        r.onclick = () => { for (let i = 0; i < 4; i++) sfx(key, { when: i * 0.18 }); };
+        row.appendChild(r);
+      }
+    }
+    list.appendChild(row);
+  }
+}
+
+// demos
+const demos = {
+  salvo() {
+    for (let i = 0; i < 6; i++) {
+      const t = i * 0.28;
+      sfx('ball_launch', { when: t });
+      sfx('ball_wall', { when: t + 0.35 }); sfx('ball_hit', { when: t + 0.6 });
+      sfx('ball_wall', { when: t + 0.8 }); sfx(i === 3 ? 'ball_crit' : 'ball_hit', { when: t + 1.05 });
+    }
+    sfx('ball_catch', { when: 2.9 });
+  },
+  xp() { for (let i = 0; i < 8; i++) play(pick('pk_xp'), { rate: Math.pow(2, i / 12), when: i * 0.09 }); },
+  kill() {
+    sfx('ball_hit', { when: 0 }); sfx('ball_crit', { when: 0.3 }); sfx('en_death', { when: 0.33 });
+    for (let i = 0; i < 4; i++) play(pick('pk_xp'), { rate: Math.pow(2, i / 12), when: 0.6 + i * 0.09 });
+    sfx('pl_levelup', { when: 1.1 }); sfx('ui_click', { when: 2.4 });
+  },
+  async mixcheck() {
+    const m = await play(pick('mus_battle_loop'), { loop: true, gain: 0.5 });
+    demos.salvo(); sfx('en_death', { when: 1.5 }); sfx('pl_hurt', { when: 2.4 }); sfx('pl_levelup', { when: 3.4 });
+    setTimeout(() => m.stop(), 8000);
+  },
+};
+document.querySelectorAll('[data-demo]').forEach(b => b.onclick = () => { ensureCtx(); demos[b.dataset.demo](); });
+document.getElementById('vol').oninput = e => { ensureCtx(); master.gain.value = +e.target.value; };
+document.getElementById('stop').onclick = () => {
+  playing.forEach(h => h.stop()); playing.clear();
+  Object.keys(loops).forEach(k => delete loops[k]);
+  document.querySelectorAll('button.on').forEach(b => { b.classList.remove('on'); b.textContent = 'Loop ▶'; });
+};
+status(location.protocol === 'file:' ? 'file:// mode (HTML audio; loops may click at the seam)' : 'Web Audio mode');
+</script>
+</body>
+</html>

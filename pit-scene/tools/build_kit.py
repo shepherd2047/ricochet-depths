@@ -1,0 +1,562 @@
+"""Headless Blender: script-model the Theme 1 ("The Sunken Yard") pit kit, UV it into the shared atlas,
+check budgets, export one FBX + one GLB per piece, save kit/t1_kit.blend and render a kit sheet.
+
+Usage (from pit-scene/):
+  /opt/homebrew/bin/blender -b -P tools/build_kit.py
+  (run tools/make_atlas.py first; it writes textures/T1_Scenery_Atlas.png)
+
+Piece frame (Blender; Unity in brackets, same for FBX and GLB):
+  origin  = floor level, centre of the piece along the wall, ON the collision face (board edge line)
+  -Y      = into the board, the face the player sees            [Unity +Z, transform.forward]
+  +X      = along the wall                                      [Unity -X]
+  +Z      = up, out of the floor                                [Unity +Y]
+  Wall segments span x in [-0.5625, +0.5625] (one 1.125-unit cell) and keep every face at y >= 0 below z = 1.5,
+  so nothing covers the board edge where balls and units are. The body extends to +Y (outside the board).
+"""
+import json
+import math
+import os
+import random
+
+import bmesh
+import bpy
+from mathutils import Matrix, Vector
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ATLAS = os.path.join(ROOT, "textures", "T1_Scenery_Atlas.png")
+CELL = 1.125
+HALF = CELL / 2
+H = 4.5          # brick face height (atlas brick regions map exactly 1 cell x 4.5)
+D = 0.75         # wall body depth behind the collision face
+PLINTH = 0.35
+COPE_Z0, COPE_Z1 = 4.4, 4.7
+VERT_BUDGET = 2000
+ATLAS_PX = 1024
+
+# name: (x0, y0, x1, y1) pixel rect (top-left origin), mode, (units across, units down)
+REGIONS = {
+    "brick_a": ((0, 0, 256, 1024), "wall", (CELL, H)),
+    "brick_b": ((256, 0, 512, 1024), "wall", (CELL, H)),
+    "stone":   ((512, 0, 768, 512), "fit", (CELL, 2 * CELL)),
+    "floor_a": ((512, 512, 768, 768), "fit", (CELL, CELL)),
+    "floor_b": ((512, 768, 768, 1024), "fit", (CELL, CELL)),
+    "iron":    ((768, 0, 1024, 256), "fit", (CELL, CELL)),
+    "clay":    ((768, 256, 1024, 512), "fit", (CELL, CELL)),
+    "bronze":  ((768, 512, 1024, 768), "fit", (CELL, CELL)),
+}
+SWATCH_NAMES = ["iron", "iron_hi", "chain", "soot", "mortar", "wood", "copper", "rust",
+                "stone_dk", "stone", "teal", "deep", "clay", "bronze", "patina", "water"]
+for i, n in enumerate(SWATCH_NAMES):
+    x, y = 768 + (i % 8) * 32, 768 + (i // 8) * 32
+    REGIONS["sw_" + n] = ((x, y, x + 32, y + 32), "swatch", (1, 1))
+REG_IDS = {n: i for i, n in enumerate(REGIONS)}
+REG_NAMES = list(REGIONS)
+
+
+# ---------------------------------------------------------------- geometry helpers
+
+class Builder:
+    def __init__(self):
+        self.bm = bmesh.new()
+        self.reg = self.bm.faces.layers.int.new("reg")
+
+    def face(self, pts, region, want_normal=None):
+        vs = [self.bm.verts.new(p) for p in pts]
+        f = self.bm.faces.new(vs)
+        f.normal_update()
+        if want_normal is not None and f.normal.dot(Vector(want_normal)) < 0:
+            f.normal_flip()
+        f[self.reg] = REG_IDS[region]
+        return f
+
+    def box(self, lo, hi, region, skip=(), regions=None):
+        """Axis-aligned box. skip: subset of '-x +x -y +y -z +z' faces to leave out (hidden faces).
+        regions: optional per-face override, e.g. {'+z': 'stone'}."""
+        x0, y0, z0 = lo
+        x1, y1, z1 = hi
+        quads = {
+            "-x": ([(x0, y0, z0), (x0, y1, z0), (x0, y1, z1), (x0, y0, z1)], (-1, 0, 0)),
+            "+x": ([(x1, y0, z0), (x1, y0, z1), (x1, y1, z1), (x1, y1, z0)], (1, 0, 0)),
+            "-y": ([(x0, y0, z0), (x0, y0, z1), (x1, y0, z1), (x1, y0, z0)], (0, -1, 0)),
+            "+y": ([(x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1)], (0, 1, 0)),
+            "-z": ([(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0)], (0, 0, -1)),
+            "+z": ([(x0, y0, z1), (x0, y1, z1), (x1, y1, z1), (x1, y0, z1)], (0, 0, 1)),
+        }
+        for k, (pts, n) in quads.items():
+            if k in skip:
+                continue
+            self.face(pts, (regions or {}).get(k, region), n)
+
+    def sweep(self, path, radius, sides, region, closed=False, ref=(0, 0, 1), caps=True, twist=0.0):
+        """Tube along a polyline. radius: float or per-point list."""
+        n = len(path)
+        P = [Vector(p) for p in path]
+        rads = radius if isinstance(radius, (list, tuple)) else [radius] * n
+        rings = []
+        for i in range(n):
+            if closed:
+                t = (P[(i + 1) % n] - P[(i - 1) % n])
+            else:
+                t = (P[min(i + 1, n - 1)] - P[max(i - 1, 0)])
+            t.normalize()
+            r = Vector(ref)
+            if abs(t.dot(r)) > 0.95:
+                r = Vector((1, 0, 0)) if abs(t.x) < 0.9 else Vector((0, 1, 0))
+            nrm = t.cross(r).normalized()
+            bin_ = t.cross(nrm).normalized()
+            ring = []
+            for s in range(sides):
+                a = 2 * math.pi * s / sides + twist
+                ring.append(P[i] + (nrm * math.cos(a) + bin_ * math.sin(a)) * rads[i])
+            rings.append(ring)
+        segs = n if closed else n - 1
+        for i in range(segs):
+            a, b = rings[i], rings[(i + 1) % n]
+            for s in range(sides):
+                s2 = (s + 1) % sides
+                f = self.face([a[s], a[s2], b[s2], b[s]], region)
+                mid = (P[i] + P[(i + 1) % n]) / 2
+                if f.normal.dot(f.calc_center_median() - mid) < 0:
+                    f.normal_flip()
+        if caps and not closed and sides >= 3:
+            for ring, d in ((rings[0], P[0] - P[1]), (rings[-1], P[-1] - P[-2])):
+                self.face(ring, region, tuple(d))
+
+    def lathe_shell(self, profile, a0, a1, seg, thick, region, rims=True, jitter=0.0, seed=0):
+        """Surface of revolution about Z, as a solid shell of given thickness.
+        Inner surface at r, outer at r + thick. Open angular range gets cut rims."""
+        rnd = random.Random(seed)
+        full = abs(a1 - a0 - 2 * math.pi) < 1e-6
+        cols = seg if full else seg + 1
+
+        def ring_pts(off):
+            grid = []
+            for j, (r, z) in enumerate(profile):
+                row = []
+                for i in range(cols):
+                    a = a0 + (a1 - a0) * i / seg
+                    jr = rnd.uniform(-jitter, jitter) if jitter and (j == len(profile) - 1 or i in (0, cols - 1)) else 0
+                    jz = rnd.uniform(-jitter, jitter) * 2 if jitter and j == len(profile) - 1 else 0
+                    rr = r + off + jr
+                    row.append(Vector((rr * math.cos(a), rr * math.sin(a), z + jz)))
+                grid.append(row)
+            return grid
+        rnd_state = rnd.getstate()
+        inner = ring_pts(0.0)
+        rnd.setstate(rnd_state)
+        outer = ring_pts(thick)
+        nj = len(profile)
+        cseg = seg if full else seg
+        for j in range(nj - 1):
+            for i in range(cseg):
+                i2 = (i + 1) % cols
+                # inner faces point toward the axis, outer faces away
+                fi = self.face([inner[j][i], inner[j][i2], inner[j + 1][i2], inner[j + 1][i]], region)
+                c = fi.calc_center_median()
+                if fi.normal.dot(Vector((c.x, c.y, 0))) > 0:
+                    fi.normal_flip()
+                fo = self.face([outer[j][i], outer[j + 1][i], outer[j + 1][i2], outer[j][i2]], region)
+                c = fo.calc_center_median()
+                if fo.normal.dot(Vector((c.x, c.y, 0))) < 0:
+                    fo.normal_flip()
+        if rims:
+            for j in (0, nj - 1):  # bottom and top rims
+                for i in range(cseg):
+                    i2 = (i + 1) % cols
+                    f = self.face([inner[j][i], outer[j][i], outer[j][i2], inner[j][i2]], region)
+                    want = Vector((0, 0, -1 if j == 0 else 1))
+                    if f.normal.dot(want) < 0:
+                        f.normal_flip()
+            if not full:
+                for i in (0, cols - 1):
+                    for j in range(nj - 1):
+                        f = self.face([inner[j][i], inner[j + 1][i], outer[j + 1][i], outer[j][i]], region)
+                        a = a0 if i == 0 else a1
+                        tang = Vector((-math.sin(a), math.cos(a), 0)) * (-1 if i == 0 else 1)
+                        if f.normal.dot(tang) < 0:
+                            f.normal_flip()
+
+    def to_object(self, name):
+        bm = self.bm
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+        uv = bm.loops.layers.uv.new("UVMap")
+        for f in bm.faces:
+            assign_uv(f, uv, REG_NAMES[f[self.reg]])
+        me = bpy.data.meshes.new(name)
+        bm.to_mesh(me)
+        bm.free()
+        for p in me.polygons:
+            p.use_smooth = False
+        ob = bpy.data.objects.new(name, me)
+        ob.data.materials.append(scenery_material())
+        return ob
+
+
+def assign_uv(f, uvl, region):
+    (x0, y0, x1, y1), mode, (su, sv) = REGIONS[region]
+    n = f.normal
+    ax = max(range(3), key=lambda i: abs(n[i]))
+    cos = [l.vert.co for l in f.loops]
+    if mode == "swatch":
+        cu, cv = (x0 + x1) / 2, (y0 + y1) / 2
+        for l in f.loops:
+            l[uvl].uv = (cu / ATLAS_PX, 1 - cv / ATLAS_PX)
+        return
+    if mode == "wall" and ax != 2:
+        a_idx = 0 if ax == 1 else 1
+        uvs = []
+        for c in cos:
+            u = (c[a_idx] + HALF) / CELL if a_idx == 0 else (c[1] % CELL) / CELL
+            uvs.append((min(max(u, 0.0), 1.0), min(max(c.z / H, 0.0), 1.0)))
+        ins = (0, 0)
+    else:
+        a_idx, b_idx = {0: (1, 2), 1: (0, 2), 2: (0, 1)}[ax]
+        A = [c[a_idx] for c in cos]
+        B = [c[b_idx] for c in cos]
+        amin, bmin = min(A), min(B)
+        span_u = (max(A) - amin) / su
+        span_v = (max(B) - bmin) / sv
+        k = 1.0 / max(1.0, span_u, span_v)
+        uvs = [((a - amin) / su * k, (b - bmin) / sv * k) for a, b in zip(A, B)]
+        ins = (2, 2)
+    for l, (u, v) in zip(f.loops, uvs):
+        px = x0 + ins[0] + u * (x1 - x0 - 2 * ins[0])
+        py = y1 - ins[1] - v * (y1 - y0 - 2 * ins[1])
+        l[uvl].uv = (px / ATLAS_PX, 1 - py / ATLAS_PX)
+
+
+_MAT = None
+
+
+def scenery_material():
+    global _MAT
+    if _MAT:
+        return _MAT
+    m = bpy.data.materials.new("T1_Scenery")
+    m.use_nodes = True
+    nt = m.node_tree
+    bsdf = nt.nodes.get("Principled BSDF")
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = bpy.data.images.load(ATLAS, check_existing=True)
+    tex.image.colorspace_settings.name = "sRGB"
+    tex.interpolation = "Linear"
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = 0.9
+    if "Specular IOR Level" in bsdf.inputs:
+        bsdf.inputs["Specular IOR Level"].default_value = 0.2
+    _MAT = m
+    return m
+
+
+# ---------------------------------------------------------------- shared wall parts
+
+def plinth_and_cope(b, plinth=True, face_y=0.04, cope_skip=()):
+    if plinth:
+        b.box((-HALF, 0, 0), (HALF, D, PLINTH), "stone", skip=("-x", "+x", "-z", "+y"))
+    b.box((-HALF, -0.12, COPE_Z0), (HALF, D + 0.1, COPE_Z1), "stone", skip=("-x", "+x") + tuple(cope_skip))
+
+
+def brick_face(b, region, x0=-HALF, x1=HALF, z0=PLINTH, z1=COPE_Z0, y=0.04):
+    b.box((x0, y, z0), (x1, D, z1), region, skip=("-x", "+x", "-z", "+z", "+y"))
+
+
+def alcove(b, x0, x1, z1, depth, back_region, lintel=True):
+    """Brick wall with a recessed alcove x0..x1, from plinth top to z1, back face at y=depth."""
+    brick_face(b, "brick_a", -HALF, x0)
+    brick_face(b, "brick_a", x1, HALF)
+    top = z1 + (0.3 if lintel else 0)
+    if lintel:
+        b.box((x0, 0.0, z1), (x1, D, top), "stone", skip=("-x", "+x", "+y", "+z"))
+    brick_face(b, "brick_a", x0, x1, top, COPE_Z0)
+    b.box((x0, depth, PLINTH), (x1, D, z1), back_region, skip=("-x", "+x", "-z", "+z", "+y"))
+    # jambs and sill
+    b.face([(x0, 0.04, PLINTH), (x0, depth, PLINTH), (x0, depth, z1), (x0, 0.04, z1)], "brick_a", (1, 0, 0))
+    b.face([(x1, 0.04, PLINTH), (x1, 0.04, z1), (x1, depth, z1), (x1, depth, PLINTH)], "brick_a", (-1, 0, 0))
+    b.face([(x0, 0.0, PLINTH), (x1, 0.0, PLINTH), (x1, depth, PLINTH), (x0, depth, PLINTH)], "stone", (0, 0, 1))
+
+
+def diamond_link(b, centre, turned, half_len=0.085, half_w=0.05, r=0.02):
+    cx, cy, cz = centre
+    if turned:
+        pts = [(cx, cy, cz + half_len), (cx + half_w, cy, cz), (cx, cy, cz - half_len), (cx - half_w, cy, cz)]
+        ref = (0, 1, 0)
+    else:
+        pts = [(cx, cy, cz + half_len), (cx, cy + half_w, cz), (cx, cy, cz - half_len), (cx, cy - half_w, cz)]
+        ref = (1, 0, 0)
+    b.sweep(pts, r, 3, "sw_chain", closed=True, ref=ref)
+
+
+def chain(b, x, y, z_top, links, pitch=0.13):
+    for i in range(links):
+        diamond_link(b, (x, y, z_top - 0.085 - i * pitch), i % 2 == 1)
+
+
+# ---------------------------------------------------------------- pieces
+
+def wall_brick_a():
+    b = Builder()
+    plinth_and_cope(b)
+    brick_face(b, "brick_a")
+    return b.to_object("T1_Wall_BrickA")
+
+
+def wall_brick_b():
+    b = Builder()
+    plinth_and_cope(b, cope_skip=())
+    brick_face(b, "brick_b")
+    # two loose bricks pushed out of the face (only above z 1.5, so the board edge stays clear)
+    for (x, z) in ((-0.2, 2.62), (0.24, 3.46)):
+        b.box((x - 0.14, -0.05, z), (x + 0.14, 0.04, z + 0.14), "sw_stone_dk", skip=("+y",))
+    # a chipped block sitting on the coping
+    b.box((0.1, 0.05, COPE_Z1), (0.42, 0.4, COPE_Z1 + 0.16), "stone", skip=("-z",))
+    return b.to_object("T1_Wall_BrickB")
+
+
+def wall_iron_rib():
+    b = Builder()
+    plinth_and_cope(b)
+    rec = 0.2
+    brick_face(b, "brick_a", y=rec)
+    # side returns of the recess so neighbours' faces (at y = 0.04) meet cleanly
+    for x, n in ((-HALF, 1), (HALF, -1)):
+        pts = [(x, 0.04, PLINTH), (x, rec, PLINTH), (x, rec, COPE_Z0), (x, 0.04, COPE_Z0)]
+        b.face(pts, "brick_a", (n, 0, 0))
+    b.face([(-HALF, 0.04, PLINTH), (HALF, 0.04, PLINTH), (HALF, rec, PLINTH), (-HALF, rec, PLINTH)], "stone", (0, 0, 1))
+    # I-beam: flange flush with the collision face, web back into the recess
+    b.box((-0.16, 0.0, PLINTH), (0.16, 0.07, COPE_Z0), "iron", skip=("-z", "+z", "+y"))
+    b.box((-0.04, 0.07, PLINTH), (0.04, rec, COPE_Z0), "sw_iron", skip=("-z", "+z", "+y", "-y"))
+    # tie band near the top + rivets
+    b.box((-HALF, -0.02, 3.86), (HALF, rec, 4.1), "iron", skip=("+y", "-x", "+x"))
+    for z in [0.8 + 0.42 * i for i in range(8)]:
+        for x in (-0.11, 0.11):
+            b.box((x - 0.025, -0.03, z - 0.025), (x + 0.025, 0.0, z + 0.025), "sw_iron_hi", skip=("+y",))
+    for x in (-0.42, -0.26, 0.26, 0.42):
+        b.box((x - 0.025, -0.05, 3.955), (x + 0.025, -0.02, 4.005), "sw_iron_hi", skip=("+y",))
+    return b.to_object("T1_Wall_IronRib")
+
+
+def wall_chain():
+    b = Builder()
+    plinth_and_cope(b)
+    alcove(b, -0.42, 0.42, 3.75, 0.34, "brick_b")
+    # hoist bracket across the alcove top + three chain strands
+    b.box((-0.4, 0.06, 3.58), (0.4, 0.34, 3.72), "iron", skip=("+y",))
+    for x, n in ((-0.22, 9), (0.0, 13), (0.22, 7)):
+        chain(b, x, 0.18, 3.58, n)
+    # slack loop: a short strand hooked across
+    for i, x in enumerate((-0.14, -0.07, 0.0, 0.07, 0.14)):
+        diamond_link(b, (x, 0.12, 1.25 - abs(x) * 1.2), i % 2 == 0, half_len=0.05, half_w=0.03, r=0.016)
+    return b.to_object("T1_Wall_Chain")
+
+
+def wall_mould():
+    b = Builder()
+    plinth_and_cope(b)
+    depth = 0.52
+    alcove(b, -0.46, 0.46, 3.4, depth, "brick_b")
+    # broken half of a bell-casting mould, standing in the alcove with its hollow facing the board
+    prof = [(0.40, PLINTH), (0.39, 0.9), (0.33, 1.55), (0.27, 2.1), (0.2, 2.5), (0.12, 2.72)]
+    s = Builder()
+    s.lathe_shell(prof, 0.0, math.pi, 6, 0.07, "clay", jitter=0.03, seed=7)
+    # move shell into this piece: axis at y = depth - 0.47 so the outer back touches the alcove wall
+    for v in s.bm.verts:
+        v.co.y += depth - 0.47
+    _merge(b, s)
+    # cracked-off piece lying on the sill
+    b.box((0.12, 0.02, PLINTH), (0.34, 0.2, PLINTH + 0.1), "clay", skip=("-z",))
+    return b.to_object("T1_Wall_Mould")
+
+
+def wall_trough():
+    b = Builder()
+    plinth_and_cope(b, plinth=False)
+    nx, nz, nd = 0.46, 1.3, 0.62
+    # brick face around a low niche, stone lintel above it
+    brick_face(b, "brick_a", -HALF, -nx, 0.0)
+    brick_face(b, "brick_a", nx, HALF, 0.0)
+    b.box((-nx, 0.0, nz), (nx, D, nz + 0.3), "stone", skip=("-x", "+x", "+y", "+z"))
+    brick_face(b, "brick_a", -nx, nx, nz + 0.3)
+    b.box((-nx, nd, 0), (nx, D, nz), "brick_b", skip=("-x", "+x", "-z", "+z", "+y"))
+    b.face([(-nx, 0.04, 0), (-nx, nd, 0), (-nx, nd, nz), (-nx, 0.04, nz)], "brick_a", (1, 0, 0))
+    b.face([(nx, 0.04, 0), (nx, 0.04, nz), (nx, nd, nz), (nx, nd, 0)], "brick_a", (-1, 0, 0))
+    # cooling trough: stone rims around dark water, inside the niche (y >= 0)
+    tx, ty0, ty1, th, w = 0.43, 0.02, 0.6, 0.55, 0.07
+    b.box((-tx, ty0, 0), (tx, ty0 + w, th), "stone", skip=("-z",))
+    b.box((-tx, ty1 - w, 0), (tx, ty1, th), "stone", skip=("-z", "+y"))
+    b.box((-tx, ty0 + w, 0), (-tx + w, ty1 - w, th), "stone", skip=("-z", "-y", "+y"))
+    b.box((tx - w, ty0 + w, 0), (tx, ty1 - w, th), "stone", skip=("-z", "-y", "+y"))
+    b.face([(-tx + w, ty0 + w, th - 0.1), (-tx + w, ty1 - w, th - 0.1), (tx - w, ty1 - w, th - 0.1), (tx - w, ty0 + w, th - 0.1)], "sw_water", (0, 0, 1))
+    # spout pipe out of the back wall
+    b.sweep([(0.18, nd, 1.0), (0.18, 0.36, 1.0), (0.18, 0.3, 0.9)], 0.045, 5, "sw_iron", ref=(0, 0, 1))
+    return b.to_object("T1_Wall_Trough")
+
+
+def corner_pillar():
+    """Pier: fills one wall slot (1 cell), deeper and taller than a segment. Also closes run ends / corners."""
+    b = Builder()
+    depth = D + 0.35
+    blocks = [(0.0, 1.2), (1.2, 2.4), (2.4, 3.6), (3.6, 4.85)]
+    for i, (z0, z1) in enumerate(blocks):
+        inset = 0.0 if i % 2 == 0 else 0.03
+        bm_before = len(b.bm.faces)
+        b.box((-HALF + inset, 0.0 + inset, z0), (HALF - inset, depth, z1), "stone", skip=("+y", "-z"))
+    # chamfer the two front vertical edges of every block
+    bm = b.bm
+    bm.verts.ensure_lookup_table()
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    edges = [e for e in bm.edges
+             if abs(e.verts[0].co.x - e.verts[1].co.x) < 1e-6 and abs(e.verts[0].co.y - e.verts[1].co.y) < 1e-6
+             and e.verts[0].co.y < 0.05 and abs(abs(e.verts[0].co.x) - HALF) < 0.05]
+    bmesh.ops.bevel(bm, geom=edges, offset=0.09, segments=1, affect="EDGES", profile=0.5)
+    for f in bm.faces:  # bevel faces inherit layer 0 -> force stone
+        if f[b.reg] != REG_IDS["stone"]:
+            f[b.reg] = REG_IDS["stone"]
+    # cap stone
+    b.box((-HALF - 0.06, -0.14, 4.85), (HALF + 0.06, depth + 0.1, 5.15), "stone", skip=("-z",))
+    # iron strap with a copper-tinted plate (the only accent on the walls)
+    b.box((-HALF - 0.01, -0.03, 3.0), (HALF + 0.01, depth, 3.16), "iron", skip=("+y", "-z", "+z"))
+    b.box((-0.12, -0.06, 2.9), (0.12, -0.02, 3.26), "sw_copper", skip=("+y",))
+    return b.to_object("T1_Pillar")
+
+
+def floor_tile(name, region):
+    b = Builder()
+    b.face([(-HALF, -HALF, 0), (HALF, -HALF, 0), (HALF, HALF, 0), (-HALF, HALF, 0)], region, (0, 0, 1))
+    return b.to_object(name)
+
+
+def prop_hook():
+    """Hoist hook on three links. Origin = the hanging point (top of the chain)."""
+    b = Builder()
+    chain(b, 0, 0, 0, 3, pitch=0.15)
+    top = -0.45
+    path = [(0, 0, top), (0, 0, top - 0.35)]
+    cx, cz, r = 0.2, top - 0.35, 0.2
+    for i in range(1, 9):
+        a = math.pi + i * (math.pi + 0.7) / 8
+        path.append((cx + r * math.cos(a), 0, cz + r * math.sin(a)))
+    rads = [0.055, 0.06] + [0.06 - 0.04 * i / 8 for i in range(1, 9)]
+    b.sweep(path, rads, 4, "sw_iron", ref=(0, 1, 0), twist=math.pi / 4)
+    # eye block where the chain meets the shank
+    b.box((-0.06, -0.06, top - 0.04), (0.06, 0.06, top + 0.05), "sw_iron_hi")
+    ob = b.to_object("T1_Prop_Hook")
+    return ob
+
+
+def prop_bell_shard():
+    """Curved shard of a cracked bell. Origin = floor contact, centre of the bottom edge."""
+    b = Builder()
+    prof = [(1.0, 0.0), (0.93, 0.22), (0.8, 0.55), (0.72, 0.9), (0.7, 1.12)]
+    b.lathe_shell(prof, -0.55, 0.55, 4, 0.08, "bronze", jitter=0.06, seed=3)
+    for v in b.bm.verts:  # recentre: bottom-edge centre to origin, convex side toward -Y
+        v.co.x -= 1.0
+    rot = Matrix.Rotation(math.radians(90), 4, "Z")
+    bmesh.ops.transform(b.bm, matrix=rot, verts=b.bm.verts)
+    return b.to_object("T1_Prop_BellShard")
+
+
+def prop_ladle():
+    """Long-handled foundry ladle. Origin = bottom of the bowl."""
+    b = Builder()
+    prof = [(0.03, 0.0), (0.15, 0.04), (0.21, 0.12), (0.23, 0.24)]
+    b.lathe_shell(prof, 0, 2 * math.pi, 7, 0.025, "sw_rust")
+    b.sweep([(0.2, 0, 0.22), (0.45, 0, 0.6), (0.9, 0, 1.45)], 0.032, 5, "sw_iron", ref=(0, 1, 0))
+    b.box((0.86, -0.05, 1.4), (0.98, 0.05, 1.62), "sw_wood")
+    return b.to_object("T1_Prop_Ladle")
+
+
+def _merge(dst, src):
+    """Copy src builder's faces into dst (keeping region tags)."""
+    vmap = {}
+    for v in src.bm.verts:
+        vmap[v] = dst.bm.verts.new(v.co)
+    for f in src.bm.faces:
+        nf = dst.bm.faces.new([vmap[v] for v in f.verts])
+        nf[dst.reg] = f[src.reg]
+        nf.normal_update()
+    src.bm.free()
+
+
+PIECES = [
+    ("wall", wall_brick_a), ("wall", wall_brick_b), ("wall", wall_iron_rib), ("wall", wall_chain),
+    ("wall", wall_mould), ("wall", wall_trough), ("wall", corner_pillar),
+    ("floor", lambda: floor_tile("T1_Floor_A", "floor_a")), ("floor", lambda: floor_tile("T1_Floor_B", "floor_b")),
+    ("prop", prop_hook), ("prop", prop_bell_shard), ("prop", prop_ladle),
+]
+
+
+def unity_vertex_count(me):
+    """Unity splits a vertex wherever normal or UV differ. With flat shading: unique (vert, face normal, uv)."""
+    me.calc_loop_triangles()
+    uv = me.uv_layers.active.data
+    keys = set()
+    for p in me.polygons:
+        n = tuple(round(c, 4) for c in p.normal)
+        for li in p.loop_indices:
+            l = me.loops[li]
+            keys.add((l.vertex_index, n, tuple(round(c, 5) for c in uv[li].uv)))
+    return len(keys), len(me.loop_triangles)
+
+
+def build_all(link_to=None):
+    coll = link_to or bpy.context.scene.collection
+    objs = {}
+    for kind, fn in PIECES:
+        ob = fn()
+        ob["kit_kind"] = kind
+        coll.objects.link(ob)
+        objs[ob.name] = ob
+    return objs
+
+
+def export_piece(ob, fbx_dir, glb_dir):
+    bpy.ops.object.select_all(action="DESELECT")
+    ob.select_set(True)
+    bpy.context.view_layer.objects.active = ob
+    loc = ob.location.copy()
+    ob.location = (0, 0, 0)
+    bpy.ops.export_scene.fbx(filepath=os.path.join(fbx_dir, ob.name + ".fbx"), use_selection=True,
+                             apply_scale_options="FBX_SCALE_UNITS", axis_forward="-Z", axis_up="Y",
+                             bake_space_transform=True, mesh_smooth_type="FACE", path_mode="STRIP",
+                             embed_textures=False, add_leaf_bones=False)
+    bpy.ops.export_scene.gltf(filepath=os.path.join(glb_dir, ob.name + ".glb"), use_selection=True,
+                              export_format="GLB", export_image_format="NONE", export_apply=True)
+    ob.location = loc
+
+
+def main():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    kit = bpy.data.collections.new("Kit")
+    bpy.context.scene.collection.children.link(kit)
+    objs = build_all(kit)
+    fbx_dir = os.path.join(ROOT, "kit", "fbx")
+    glb_dir = os.path.join(ROOT, "kit", "glb")
+    report = {}
+    for name, ob in objs.items():
+        v, t = unity_vertex_count(ob.data)
+        bb = [ob.matrix_world @ Vector(c) for c in ob.bound_box]
+        dims = [round(max(c[i] for c in bb) - min(c[i] for c in bb), 3) for i in range(3)]
+        report[name] = {"kind": ob["kit_kind"], "unity_verts": v, "tris": t, "size_xyz_blender": dims,
+                        "budget_ok": v <= VERT_BUDGET}
+        export_piece(ob, fbx_dir, glb_dir)
+        print(f"KIT {name:22s} verts {v:5d} tris {t:5d} size {dims}")
+    # lay pieces out in a row for the kit sheet / .blend
+    x = 0.0
+    for name, ob in objs.items():
+        w = report[name]["size_xyz_blender"][0]
+        ob.location = (x + w / 2, 0, 0)
+        x += w + 0.5
+    # a single viewing GLB with the atlas embedded
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.export_scene.gltf(filepath=os.path.join(ROOT, "kit", "T1_Kit_All_preview.glb"), use_selection=True,
+                              export_format="GLB", export_image_format="AUTO")
+    with open(os.path.join(ROOT, "kit", "kit_report.json"), "w") as fh:
+        json.dump(report, fh, indent=2)
+    for ob in objs.values():
+        ob.location = (0, 0, 0)
+        ob.hide_render = True
+    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "kit", "t1_kit.blend"))
+
+
+if __name__ == "__main__":
+    main()

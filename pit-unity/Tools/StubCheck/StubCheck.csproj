@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Type-checks Assets/Scripts/Game against a hand-written stub of the UnityEngine API it uses.
+       This catches C# mistakes only; it does not prove the calls match real Unity. -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <LangVersion>9</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>CS0618;CS0649;CS0414</NoWarn>
+    <!-- dotnet run -p:Urp=false checks the built-in-pipeline path -->
+    <DefineConstants Condition="'$(Urp)' != 'false'">$(DefineConstants);PIT_URP</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="UnityStub.cs" /><Compile Include="Smoke.cs" /><Compile Include="FrameRender.cs" />
+    <Compile Include="../../Assets/Scripts/Core/**/*.cs" />
+    <Compile Include="../../Assets/Scripts/Game/**/*.cs" />
+  </ItemGroup>
+</Project>
