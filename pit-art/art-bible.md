@@ -135,7 +135,11 @@ Generated with Figma AI `generate_image` (user's credits) in a new Figma file "P
 4. Heroes → Mixamo (below) → FBX into Unity. Enemies → Unity directly; idle/walk/attack/death as baked vertex animation at 8–12 fps (style.md §6).
 5. Atlas packing: in Unity or Blender, place each 256/512 texture into the theme atlas and offset UVs.
 
-### Mixamo rigging (user does the login)
+### Hero rigging
+
+Default (2026-10-19): `tools/rig_hero.py`. It rigs headless in Blender with Humanoid bone names and six keyed clips (Idle, Walk, Shoot, Hit, Death, Victory) and needs no account; see report.md. Mixamo below is optional, for extra clips. Any Humanoid clip retargets in Unity.
+
+#### Mixamo rigging (user does the login)
 
 1. Export the decimated hero as **FBX** (`--out hero.fbx`), A-pose, facing +Y in Blender (= forward in Mixamo), ≤ 1000 verts, single mesh, texture embedded.
 2. Go to mixamo.com → sign in with your Adobe ID (yourself) → **Upload Character** → drop the FBX.

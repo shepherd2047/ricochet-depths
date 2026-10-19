@@ -73,6 +73,30 @@ Clean room: I read only `ballpit-spec/style.md` and `ballpit-spec/spec.md` (arch
 - The bold Wren / Osk / Juno concepts (`concept/v2/`) aren't converted. Tinker's raw TRELLIS mesh has a launcher part floating off the right arm; it needs a fix before rigging.
 - The test bold Shambler was discarded. The old dark Wren / Osk / Juno low-poly models are still in `models/lowpoly/` but parked.
 
+## Tinker rigged and animated (2026-10-19)
+
+- `tools/rig_hero.py` rigs a low-poly A-pose hero headless in Blender, **without Mixamo or any login**:
+  - It merges UV-seam duplicates (975 → 354 positions; Unity still sees ~975 verts).
+  - It moves Tinker's floating launcher into his right hand (`--prop-move=0.03,-0.02,-0.125`) and binds it 100 % to `RightHand`.
+  - It estimates joints from the mesh. The crotch is found from the back half, because the apron hangs between the legs.
+  - It builds 21 bones with Unity Humanoid auto-map names (Hips, Spine, Chest, Neck, Head, Left/Right Shoulder, UpperArm, LowerArm, Hand, UpperLeg, LowerLeg, Foot, Toes) and skins with bone-heat weights.
+- **Clips** (30 fps, keyed in the script):
+
+| Clip | Frames | Loop |
+|---|---|---|
+| Idle | 60 | yes |
+| Walk | 24 | yes |
+| Shoot | 18 | no |
+| Hit | 12 | no |
+| Death | 30 | no (holds lying on the back) |
+| Victory | 30 | yes |
+
+- Output: `models/rigged/hero_tinker.fbx` (Unity: set Rig = Humanoid, then split clips by the take names) and `hero_tinker.glb`. Previews are in `models/rigged/preview/` (`hero_tinker_all.gif` plus one GIF per clip).
+- Rebuild: `blender -b -P tools/rig_hero.py -- --in models/lowpoly/hero_tinker.glb --out models/rigged/hero_tinker --prop-move=0.03,-0.02,-0.125 [--views DIR] [--clip-frames DIR]`.
+- Sign rule (in the code): a positive X rotation swings a downward bone (leg, arm) backward and leans an upward bone (spine, head) forward.
+- Not checked: import into Unity and Humanoid avatar validation. The launcher is a fork held upright in the hand; it isn't aimed down the arm.
+- Enemies aren't animated yet. art-bible §6 says baked vertex animation at 8–12 fps.
+
 ## Next
 
 1. Done: the 7 remaining concepts are generated (13 Figma AI calls in total). Mender's wax is lighter than the enemy value range; decimate.py's `--vrange` pulls it down.
