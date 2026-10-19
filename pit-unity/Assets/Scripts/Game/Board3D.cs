@@ -1,10 +1,12 @@
 // The 3D presentation of the board (style.md §1–§6). The simulation stays 2D: Board3D only mirrors it.
-//   • A perspective camera looks down into the pit at 30° from straight-on, from behind and above the hero. Each frame
-//     it is fitted so the whole board (7 columns plus half a cell each side) sits between the HUD bands, so it eases
-//     back by itself while the pit widens over 3 s. Touches are cast back onto the board plane (ScreenToBoard).
+//   • A perspective camera looks down into the pit at 40° from straight-on, from behind and above the hero (style.md §2
+//     as ruled, LIGHTING.md). Each frame it is fitted so the near row plus 1.5 cells each side (the prop lane and half
+//     a cell of wall) spans the screen width and the board sits between the HUD bands, so it eases back by itself while
+//     the pit widens over 3 s. Touches are cast back onto the board plane (ScreenToBoard).
 //   • The 2D World/Glow layers of Gfx are parented to WorldRoot, which lays design space flat onto the board plane.
-//   • One white key light with soft shadows, a trilight ambient, linear fog in the background colour, and Bloom whose
-//     threshold only the over-bright Glow layer and emissive eyes reach.
+//   • One white key light with soft shadows, two blue-grey wall fills and the copper furnace spot (per-pixel additional
+//     lights), a trilight ambient, linear fog in the background colour, and Bloom whose threshold only the over-bright
+//     Glow layer, emissive eyes and the scenery's window panes reach.
 //   • The pit-scene corridor kit (ASSEMBLY.md, spec §1.3a): no ceiling, a long corridor whose floor strips and wall
 //     segments scroll toward the hero and recycle in 4-row groups, start → mid → end segments by run progress, and the
 //     casting-pit gate that rides in out of the fog for the final boss. One pooled view per foe, boss and
@@ -24,8 +26,9 @@ namespace Pit.Game
     public sealed class Board3D
     {
         public const float Fov = 65, Near = 0.3f, Far = 1000;
-        public const float Pitch = 30;                           // degrees away from looking straight at the plane
-        const float Margin = 0.5f;                               // world units of floor kept visible past each side
+        public const float Pitch = 40;                           // degrees away from looking straight at the plane
+        const float MarginX = 1.5f;                              // cells kept visible past each side of the near row
+        const float Margin = 0.5f;                               // cells kept visible past the far and near rows
         public const float K = 1 / Run.CELL;                    // world units per board unit: one cell = 1 unit
         const float AnimFps = 10;
 
@@ -144,6 +147,22 @@ namespace Pit.Game
             light.shadows = LightShadows.Soft;
             light.shadowStrength = 0.8f;
 
+            // LIGHTING.md wall fill: one per wall, across the corridor into the wall it lights, about 80° from straight
+            // down and tipped 30° toward the far end (pit-frame Euler (30, ±80, 0), here with up = -z)
+            for (int side = -1; side <= 1; side += 2)
+            {
+                var fg = new GameObject(side < 0 ? "Fill Left" : "Fill Right");
+                fg.transform.SetParent(root, false);
+                float a = 80 * Mathf.Deg2Rad, t = 30 * Mathf.Deg2Rad;
+                var dir = new Vector3(side * Mathf.Cos(t) * Mathf.Sin(a), Mathf.Sin(t), Mathf.Cos(t) * Mathf.Cos(a));
+                fg.transform.localRotation = Quaternion.LookRotation(dir, new Vector3(0, 0, -1));
+                var fl = fg.AddComponent<Light>();
+                fl.type = LightType.Directional;
+                fl.color = new Color32(0x96, 0xac, 0xbe, 255);
+                fl.intensity = 0.8f;
+                fl.shadows = LightShadows.None;
+            }
+
             // LIGHTING.md theme light: the furnace mouth, a copper spot high behind the left wall at the far end
             var sg = new GameObject("Furnace Spot");
             sg.transform.SetParent(root, false);
@@ -187,6 +206,12 @@ namespace Pit.Game
             sceneMat.SetTexture("_MainTex", Resources.Load<Texture2D>("Scene/T1_Scenery_Atlas"));
             sceneMat.SetFloat("_Textured", 1);
             sceneMat.SetFloat("_TexEmit", 0);
+            // ASSEMBLY §5: the window panes glow through the emission map (white, HDR +1)
+            sceneMat.SetTexture("_EmisMap", Resources.Load<Texture2D>("Scene/T1_Scenery_Emit"));
+            sceneMat.SetFloat("_EmisMapGain", 1);
+            var bsh = Resources.Load<Shader>("PitBeam");
+            beamMat = new Material(bsh != null ? bsh : sh) { name = "T1_Beam" };
+            beamMat.SetColor("_Color", new Color32(0xe8, 0xa4, 0x56, 255));
         }
 
         GameObject MakeObject(string name, Transform parent, Mesh mesh, out MeshFilter mf)
@@ -340,6 +365,8 @@ namespace Pit.Game
                 if (gr.L.sharedMesh != null) f(gr.L.sharedMesh, gp + gr.L.transform.localPosition * K, new Vector3(K, K, K), 90);
                 if (gr.R.sharedMesh != null) f(gr.R.sharedMesh, gp + gr.R.transform.localPosition * K, new Vector3(K, K, K), -90);
                 if (gr.F.sharedMesh != null) f(gr.F.sharedMesh, gp, new Vector3(K, K, K), 0);
+                if (gr.LL.sharedMesh != null) f(gr.LL.sharedMesh, gp + gr.L.transform.localPosition * K, new Vector3(K, K, K), 90);
+                if (gr.RL.sharedMesh != null) f(gr.RL.sharedMesh, gp + gr.R.transform.localPosition * K, new Vector3(K, K, K), -90);
             }
             if (gate != null && gate.gameObject.activeSelf)
                 foreach (var pc in gatePieces)
@@ -350,9 +377,10 @@ namespace Pit.Game
 
         // ------------------------------------------------------------ camera fit and picking
         /// <summary>
-        /// Fits the pitched camera: the smallest distance that shows every board corner (plus Margin) inside the screen
+        /// Fits the pitched camera: the smallest distance that shows every board corner (plus MarginX across) inside the screen
         /// width and between the HUD bands, centred in that band. The near row is the widest on screen, so the far row's
-        /// 7 columns fit with room to spare. At 9:16 and FOV 65 this lands at about 14.7 units for 7x9 (style.md §2: ~15).
+        /// 7 columns fit with room to spare. At 9:16 and FOV 65 this lands at 16.9 units (19.1 kit units) for 7x9 and 27.3
+        /// (30.7) for 13x15: about 4% further than LIGHTING.md's width-only fit (18.39 / 29.57), as the HUD bands bind.
         /// </summary>
         void FitCamera(Run r, WorldView wv, Gfx g)
         {
@@ -386,8 +414,8 @@ namespace Pit.Game
 
         bool Fits(Vector3 pos, float w, float h, float band)
         {
-            var a = Ndc(pos, new Vector3(-Margin, Margin, 0)); var b = Ndc(pos, new Vector3(w + Margin, Margin, 0));
-            var c = Ndc(pos, new Vector3(-Margin, -h - Margin, 0)); var e = Ndc(pos, new Vector3(w + Margin, -h - Margin, 0));
+            var a = Ndc(pos, new Vector3(-MarginX, Margin, 0)); var b = Ndc(pos, new Vector3(w + MarginX, Margin, 0));
+            var c = Ndc(pos, new Vector3(-MarginX, -h, 0)); var e = Ndc(pos, new Vector3(w + MarginX, -h, 0));   // the near row binds the width
             float maxX = Mathf.Max(Mathf.Max(Mathf.Abs(a.x), Mathf.Abs(b.x)), Mathf.Max(Mathf.Abs(c.x), Mathf.Abs(e.x)));
             return maxX <= 1 && a.y - c.y <= band;
         }
@@ -424,7 +452,8 @@ namespace Pit.Game
         // The kit lives under Corridor in kit units (pit-scene's Blender frame: x across, +y toward the far end, up is
         // -z here), scaled by K. Corridor is pinned to the floor: it moves with Run.FloorShift, so units standing on the
         // board keep their place on it. Group slots hold absolute group indices G; a group whose rows have passed
-        // k −16 is redrawn 9 groups further on, out in the fog.
+        // k −16 is redrawn 9 groups further on, out in the fog. The walls stand one prop lane (1 cell) outside the board
+        // edge; the lane piece shares its wall's transform, and its kerb marks the collision line (ASSEMBLY §1, §2).
         const int Groups = 9;
         static readonly string[][] Sets =
         {
@@ -437,13 +466,13 @@ namespace Pit.Game
         {
             public int G = int.MinValue;
             public Transform T;
-            public MeshFilter L, R, F;
+            public MeshFilter L, R, F, LL, RL;   // walls, floor strip, prop lanes
             public string Ln, Rn;
             public bool B;
         }
 
         readonly Transform corridor;
-        readonly Material sceneMat;
+        readonly Material sceneMat, beamMat;
         readonly Group[] groups = new Group[Groups];
         Transform gate;
         MeshFilter[] gatePieces;
@@ -465,6 +494,7 @@ namespace Pit.Game
             corridor.localScale = new Vector3(K, K, K);
             float kBase = (r.Bh / 2 - bhRef / 2 - r.FloorShift) / C;   // + 4G + 1.5 = group G's centre row, k up from the board centre
             int cols = Mathf.Clamp(r.Expand != null ? r.Expand.ToCols : r.Cols, 7, 13) | 1;   // strips swap at the start of an expansion
+            float wx = r.Bw / 2 + C;   // wall face and lane origin: one lane outside the board edge
             bool restrip = cols != stripCols;
             stripCols = cols;
             float left = TurnsToFinal(r);
@@ -478,8 +508,8 @@ namespace Pit.Game
                 if (gr.G != G) Draw(gr, G, r, kBase + 4 * G + 1.5f, rows, left, prev);
                 else if (restrip) Strip(gr, cols);
                 // walls follow the board edges every frame, so they slide out with an expansion (ASSEMBLY §4.4)
-                gr.L.transform.localPosition = new Vector3(-r.Bw / 2, 0, 0);
-                gr.R.transform.localPosition = new Vector3(r.Bw / 2, 0, 0);
+                gr.L.transform.localPosition = new Vector3(-wx, 0, 0);
+                gr.R.transform.localPosition = new Vector3(wx, 0, 0);
                 bool vis = kBase + 4 * G < rows / 2 + 12;   // fully fogged beyond (ASSEMBLY §4.6)
                 if (gr.T.gameObject.activeSelf != vis) gr.T.gameObject.SetActive(vis);
                 prev = gr;
@@ -499,9 +529,9 @@ namespace Pit.Game
             {
                 if (gate.gameObject.activeSelf != showGate) gate.gameObject.SetActive(showGate);
                 gate.localPosition = new Vector3(0, (kGate - kBase) * C, 0);
-                gatePieces[0].transform.localPosition = new Vector3(-(r.Bw / 2 + 1.2f), 0, 0);
-                gatePieces[1].transform.localPosition = new Vector3(r.Bw / 2 + 1.2f, 0, 0);
-                gatePieces[2].transform.localScale = new Vector3((r.Bw + 2.4f) / 17f, 1, 1);
+                gatePieces[0].transform.localPosition = new Vector3(-(wx + 1.2f), 0, 0);
+                gatePieces[1].transform.localPosition = new Vector3(wx + 1.2f, 0, 0);
+                gatePieces[2].transform.localScale = new Vector3((2 * wx + 2.4f) / 17f, 1, 1);
             }
 
             // LIGHTING.md: fog follows the camera distance, the copper spot follows the board size
@@ -539,15 +569,26 @@ namespace Pit.Game
             gr.R = Piece(null, gr.T); gr.R.transform.localRotation = Quaternion.Euler(0, 0, -90);
             gr.F = Piece(null, gr.T);
             gr.F.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            gr.LL = Piece(null, gr.L.transform);
+            gr.RL = Piece(null, gr.R.transform);
             return gr;
         }
 
         MeshFilter Piece(string mesh, Transform parent)
         {
             MeshFilter mf;
-            var go = MakeObject(mesh ?? "piece", parent, mesh != null ? Models.Scenery(mesh) : null, out mf);
-            go.GetComponent<MeshRenderer>().sharedMaterial = sceneMat;
+            MakeObject(mesh ?? "piece", parent, null, out mf);
+            SetMesh(mf, mesh != null ? Models.Scenery(mesh) : null);
             return mf;
+        }
+
+        /// <summary>A kit mesh with its materials: slot 0 T1_Scenery, slot 1 (the window segments) T1_Beam.</summary>
+        void SetMesh(MeshFilter mf, Mesh m)
+        {
+            mf.sharedMesh = m;
+            int n = m != null ? m.subMeshCount : 1;
+            var mr = mf.GetComponent<MeshRenderer>();
+            if (mr.sharedMaterials.Length != n || mr.sharedMaterial != sceneMat) mr.sharedMaterials = n > 1 ? new[] { sceneMat, beamMat } : new[] { sceneMat };
         }
 
         /// <summary>ASSEMBLY §4.3: segments by run progress (the turn these rows reach the far row ÷ the final boss
@@ -559,14 +600,24 @@ namespace Pit.Game
             float p = finalTurn > 0 ? Mathf.Clamp01((r.Turn + (kc - rows / 2)) / finalTurn) : 1;
             gr.Ln = Pick(r, p, G, 'L', null, prev != null && prev.G == G - 1 ? prev.Ln : null);
             gr.Rn = Pick(r, p, G, 'R', gr.Ln, prev != null && prev.G == G - 1 ? prev.Rn : null);
-            gr.L.sharedMesh = Models.Scenery(gr.Ln);
-            gr.R.sharedMesh = Models.Scenery(gr.Rn);
+            SetMesh(gr.L, Models.Scenery(gr.Ln));
+            SetMesh(gr.R, Models.Scenery(gr.Rn));
+            // the lane beside each wall: same set, letter = (hash(seed, G, side, 99) >> 7) % 3 (ASSEMBLY §4.1)
+            SetMesh(gr.LL, Models.Scenery(Lane(gr.Ln, Hash4((uint)r.Seed, (uint)G, 'L', 99))));
+            SetMesh(gr.RL, Models.Scenery(Lane(gr.Rn, Hash4((uint)r.Seed, (uint)G, 'R', 99))));
             gr.B = Hash((uint)r.Seed, (uint)G, 7) % 3 == 0;
             Strip(gr, stripCols);
             gr.T.localPosition = new Vector3(0, (4 * G + 1.5f) * Run.CELL, 0);
         }
 
-        static void Strip(Group gr, int cols) { gr.F.sharedMesh = Models.Scenery("T1_FloorStrip_W" + cols + (gr.B ? "_B" : "_A")); }
+        // floor strips cover the board plus both lanes: W{cols + 2}
+        void Strip(Group gr, int cols) { SetMesh(gr.F, Models.Scenery("T1_FloorStrip_W" + (cols + 2) + (gr.B ? "_B" : "_A"))); }
+
+        static string Lane(string segment, uint h)
+        {
+            string set = segment.Substring(3, segment.Length - 5);   // "T1_Mid_A" -> "Mid"
+            return "T1_Lane_" + set + "_" + (char)('A' + (h >> 7) % 3);
+        }
 
         static string Pick(Run r, float p, int G, char side, string notThis, string prevSide)
         {
@@ -591,6 +642,8 @@ namespace Pit.Game
                 return h;
             }
         }
+
+        static uint Hash4(uint a, uint b, uint c, uint d) { unchecked { return (Hash(a, b, c) ^ d) * 16777619; } }
 
         // ------------------------------------------------------------ units
         View Get(int id)

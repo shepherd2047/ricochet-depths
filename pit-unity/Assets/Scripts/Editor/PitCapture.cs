@@ -1,6 +1,8 @@
 // Command line (needs graphics, so no -nographics):
 //   Unity -batchmode -quit -projectPath . -executeMethod Pit.EditorTools.PitCapture.Run -pitShot out.png [-pitTurn 12] [-pitHero tinker]
-//     [-pitScreen hud|title|heroes|levelup|crucible|pause|end] [-pitW 1080 -pitH 1920]
+//     [-pitScreen hud|title|heroes|levelup|crucible|pause|end] [-pitW 1080 -pitH 1920] [-pitFinal]
+// -pitFinal keeps the hero alive and stops once the final boss has been on the board for -pitAfter seconds (default 0),
+// i.e. with the gate docked.
 // Plays a bot run to the given turn through the real view code and renders one 1080x1920 gameplay frame (3D pit plus
 // the UI overlay camera) to a PNG.
 using System;
@@ -49,8 +51,17 @@ namespace Pit.EditorTools
                 uiCam.transform.localPosition = new Vector3(w / 2, -h / 2, -10);
 
                 var r = new Pit.Core.Run(1234, heroId);
+                bool final = Arg("-pitFinal", null) != null;
+                float after = float.Parse(Arg("-pitAfter", "0"), System.Globalization.CultureInfo.InvariantCulture), finalAt = 0;
                 while (!r.IsOver && r.Time < 3000)
                 {
+                    if (final)
+                    {
+                        r.P.Hp = r.P.MaxHp;
+                        if (r.Boss != null && r.Boss.BossDef.Final && r.Mode == Mode.Playing && r.Balls.Count > 0 && (finalAt += 1 / 60f) > after) break;
+                        if (r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser) { Bot.AutoPick(r); continue; }
+                        Bot.Drive(r); r.Step(1 / 60f); continue;
+                    }
                     bool ready = r.Turn >= turn && r.Balls.Count > 0;
                     if (which == "levelup" && ready && r.Mode == Mode.LevelUp) break;
                     if (which == "crucible" && ready && r.Mode == Mode.Fuser) break;

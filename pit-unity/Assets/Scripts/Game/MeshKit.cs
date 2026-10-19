@@ -458,7 +458,8 @@ namespace Pit.Game
         public static int SceneryVerts;   // largest kit piece loaded, for the budget check
 
         /// <summary>
-        /// Loads a pit-scene kit piece from Resources/Scene/&lt;name&gt;.bytes (Tools/glb_to_bytes.py, Blender axes as
+        /// Loads a pit-scene kit piece from Resources/Scene/&lt;name&gt;.bytes (Tools/glb_to_bytes.py: one submesh per
+        /// material slot, vertex colour with the light pools' alpha; Blender axes as
         /// in pit-scene/tools/assemble.py: x across, +y along the corridor toward the far end, z up). Kept in kit units
         /// (1 cell = 1.125); the corridor root scales it. z is flipped to the game's frame, where up is -z.
         /// </summary>
@@ -469,23 +470,31 @@ namespace Pit.Game
             var ta = Resources.Load<TextAsset>("Scene/" + name);
             if (ta == null) { scenery[name] = null; Debug.LogWarning("Models: Resources/Scene/" + name + " missing"); return null; }
             var b = ta.bytes;
-            int nv = System.BitConverter.ToInt32(b, 0), ni = System.BitConverter.ToInt32(b, 4), o = 8;
+            int nv = System.BitConverter.ToInt32(b, 0), nsub = System.BitConverter.ToInt32(b, 4), o = 8;
+            var counts = new int[nsub];
+            for (int s = 0; s < nsub; s++, o += 4) counts[s] = System.BitConverter.ToInt32(b, o);
             var pos = new List<Vector3>(nv); var nor = new List<Vector3>(nv); var uv = new List<Vector2>(nv); var col = new List<Color32>(nv);
-            for (int i = 0; i < nv; i++, o += 32)
+            for (int i = 0; i < nv; i++, o += 36)
             {
                 pos.Add(new Vector3(F(b, o), F(b, o + 4), -F(b, o + 8)));
                 nor.Add(new Vector3(F(b, o + 12), F(b, o + 16), -F(b, o + 20)));
                 uv.Add(new Vector2(F(b, o + 24), F(b, o + 28)));
-                col.Add(new Color32(255, 255, 255, 255));
+                col.Add(new Color32(b[o + 32], b[o + 33], b[o + 34], b[o + 35]));
             }
-            var tri = new List<int>(ni);
-            for (int i = 0; i < ni; i++, o += 2) tri.Add(System.BitConverter.ToUInt16(b, o));
-            float agree = 0;
-            for (int i = 0; i < ni; i += 3)
-                agree += Vector3.Dot(Vector3.Cross(pos[tri[i + 1]] - pos[tri[i]], pos[tri[i + 2]] - pos[tri[i]]), nor[tri[i]] + nor[tri[i + 1]] + nor[tri[i + 2]]);
-            if (agree < 0) for (int i = 0; i < ni; i += 3) { int x = tri[i + 1]; tri[i + 1] = tri[i + 2]; tri[i + 2] = x; }
             m = new Mesh { name = name };
-            m.SetVertices(pos); m.SetNormals(nor); m.SetColors(col); m.SetUVs(0, uv); m.SetTriangles(tri, 0, true);
+            m.SetVertices(pos); m.SetNormals(nor); m.SetColors(col); m.SetUVs(0, uv);
+            m.subMeshCount = nsub;
+            for (int s = 0; s < nsub; s++)
+            {
+                var tri = new List<int>(counts[s]);
+                for (int i = 0; i < counts[s]; i++, o += 2) tri.Add(System.BitConverter.ToUInt16(b, o));
+                // the z flip mirrors the mesh: keep the winding that agrees with the normals
+                float agree = 0;
+                for (int i = 0; i < tri.Count; i += 3)
+                    agree += Vector3.Dot(Vector3.Cross(pos[tri[i + 1]] - pos[tri[i]], pos[tri[i + 2]] - pos[tri[i]]), nor[tri[i]] + nor[tri[i + 1]] + nor[tri[i + 2]]);
+                if (agree < 0) for (int i = 0; i < tri.Count; i += 3) { int x = tri[i + 1]; tri[i + 1] = tri[i + 2]; tri[i + 2] = x; }
+                m.SetTriangles(tri, s, true);
+            }
             scenery[name] = m;
             SceneryVerts = Mathf.Max(SceneryVerts, nv);
             return m;

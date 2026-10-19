@@ -4,7 +4,8 @@
 // pushed over the bloom threshold and tinted by _EmisTint. Written for URP.
 // Delivered models (_Textured = 1) take their colour from _MainTex instead and use uv as texture coordinates; with
 // _TexEmit = 1 their light painted accents (the foes' eyes, seams and flues, there is no emissive map yet) glow in
-// _EmisColor.
+// _EmisColor. _EmisMap (scenery: the window panes) adds its colour × _EmisMapGain.
+// Additional lights (the wall fills and the furnace spot) are per-pixel Lambert without shadows.
 Shader "Pit/Unit"
 {
     Properties
@@ -13,6 +14,8 @@ Shader "Pit/Unit"
         _Textured ("Textured model", Float) = 0
         _TexEmit ("Glow from light albedo", Float) = 0
         _EmisColor ("Glow colour", Color) = (1, 0.62, 0.29, 1)
+        _EmisMap ("Emission map", 2D) = "black" {}
+        _EmisMapGain ("Emission map gain", Float) = 0
         _Flash ("Flash", Range(0, 1)) = 0
         _Ice ("Ice", Range(0, 1)) = 0
         _Bleed ("Bleed", Range(0, 1)) = 0
@@ -36,16 +39,18 @@ Shader "Pit/Unit"
             #pragma fragment frag
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
+            #pragma multi_compile _ _ADDITIONAL_LIGHTS
             #pragma multi_compile_fog
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
-                float _Flash, _Ice, _Bleed, _Seed, _EmisBoost, _Textured, _TexEmit;
+                float _Flash, _Ice, _Bleed, _Seed, _EmisBoost, _Textured, _TexEmit, _EmisMapGain;
                 float4 _EmisTint, _EmisColor, _MainTex_ST;
             CBUFFER_END
             float4 _PitSky, _PitEquator, _PitGround;
             TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
+            TEXTURE2D(_EmisMap); SAMPLER(sampler_EmisMap);
 
             struct Attributes
             {
@@ -118,6 +123,16 @@ Shader "Pit/Unit"
                 albedo = lerp(albedo, float3(0.32, 0.02, 0.05), _Bleed * smoothstep(0.52, 0.66, bn));
 
                 float3 col = albedo * (amb + light.color * ndl * light.shadowAttenuation);
+            #if defined(_ADDITIONAL_LIGHTS)
+                InputData inputData = (InputData)0;
+                inputData.positionWS = i.positionWS;
+                inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(i.positionCS);
+                uint pixelLightCount = GetAdditionalLightsCount();
+                LIGHT_LOOP_BEGIN(pixelLightCount)
+                    Light al = GetAdditionalLight(lightIndex, i.positionWS);
+                    col += albedo * al.color * (saturate(dot(n, al.direction)) * al.distanceAttenuation);
+                LIGHT_LOOP_END
+            #endif
 
                 float3 view = normalize(_WorldSpaceCameraPos - i.positionWS);
                 float rim = pow(1.0 - saturate(dot(n, view)), 2.0);
@@ -126,6 +141,7 @@ Shader "Pit/Unit"
 
                 float3 glow = _Textured > 0.5 ? _EmisColor.rgb : albedo;
                 col += glow * emit * _EmisBoost * _EmisTint.rgb;
+                if (_EmisMapGain > 0) col += SAMPLE_TEXTURE2D(_EmisMap, sampler_EmisMap, i.uv).rgb * _EmisMapGain;
                 col = lerp(col, float3(1, 1, 1), _Flash * 0.85);
                 col = MixFog(col, i.fog);
                 return half4(col, 1);

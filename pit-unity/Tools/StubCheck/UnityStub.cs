@@ -115,7 +115,7 @@ namespace UnityEngine
     public class Material : Object
     {
         public Material(Shader s) { }
-        public Texture mainTexture; public bool enableInstancing; public void SetTexture(string n, Texture t) { } public void SetFloat(string n, float v) { }
+        public Texture mainTexture; public bool enableInstancing; public void SetTexture(string n, Texture t) { } public void SetFloat(string n, float v) { } public void SetColor(string n, Color c) { }
     }
     public sealed class MaterialPropertyBlock { public void SetFloat(string n, float v) { } public void SetColor(string n, Color c) { } }
     public enum TextureFormat { RGBA32 = 4 }
@@ -156,7 +156,8 @@ namespace UnityEngine
         public Vector2[] uv { set { SetUVs(0, new List<Vector2>(value)); } }
         public Color32[] colors32 { set { SetColors(new List<Color32>(value)); } }
         public int[] triangles { set { SetTriangles(new List<int>(value), 0, false); } }
-        public void SetTriangles(List<int> t, int sub, bool calc) { T = new List<int>(t); IndexCount = t.Count; if (t.Count % 3 != 0) throw new System.Exception("tri count"); foreach (var i in t) if (i < 0 || i >= VertexCount) throw new System.Exception("index out of range " + i); }
+        public int subMeshCount = 1;
+        public void SetTriangles(List<int> t, int sub, bool calc) { if (sub >= subMeshCount) throw new System.Exception("submesh " + sub); if (sub == 0) T = new List<int>(); T.AddRange(t); IndexCount = T.Count; if (t.Count % 3 != 0) throw new System.Exception("tri count"); foreach (var i in t) if (i < 0 || i >= VertexCount) throw new System.Exception("index out of range " + i); }
     }
     public class Component : Object { public GameObject gameObject; public Transform transform; public T GetComponent<T>() where T : Component { return gameObject.GetComponent<T>(); } }
     public class Behaviour : Component { public bool enabled; }
@@ -184,7 +185,7 @@ namespace UnityEngine
     }
     public class Renderer : Component
     {
-        public Material sharedMaterial; public int sortingOrder; public Bounds bounds; public Rendering.ShadowCastingMode shadowCastingMode;
+        public Material sharedMaterial; public Material[] sharedMaterials { get { return new[] { sharedMaterial }; } set { sharedMaterial = value[0]; } } public int sortingOrder; public Bounds bounds; public Rendering.ShadowCastingMode shadowCastingMode;
         public void SetPropertyBlock(MaterialPropertyBlock b) { }
     }
     public sealed class MeshRenderer : Renderer { }

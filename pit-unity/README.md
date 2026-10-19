@@ -44,13 +44,15 @@ Demo tuning that is mine rather than the spec's:
 
 The simulation is still 2D. The look follows style.md:
 
-- **Camera.** The board is shown in 3D through a perspective camera that looks down 30° from behind and above the player: 65° vertical FOV, near 0.3, far 1000.
-  - The fit keeps the whole board and its walls inside the screen width and between the HUD bands.
-  - That gives a distance of 14.65 units for 7×9 (style.md §2 says about 15) and 18.2 for 9×11.
+- **Camera.** The board is shown in 3D through a perspective camera that looks down 40° from behind and above the player (style.md §2 as ruled): 65° vertical FOV, near 0.3, far 1000.
+  - The fit keeps the near row plus 1.5 cells each side (the prop lane and half a cell of wall) inside the screen width, and the board between the HUD bands.
+  - That gives 19.1 kit units for 7×9 and 30.7 for 13×15, about 4% further than LIGHTING.md's width-only 18.39 / 29.57, because the HUD bands bind.
   - The camera follows the board size every frame, so it pulls back over the 3 s expansion.
   - Touches are raycast onto the board plane (`Board3D.ScreenToBoard`) for taps and the joystick.
 - **Scenery: a treadmill corridor** (spec §1.3a; pit-scene `ASSEMBLY.md`, `LIGHTING.md`). The player and camera stay put while the floor, walls and pickups scroll toward the player at 1 cell per turn.
-  - The corridor is pit-scene's T1 kit (`Resources/Scene`, one 1024² atlas): 9 recycled 4-row groups.
+  - The corridor is pit-scene's T1 kit (`Resources/Scene`, converted by `Tools/glb_to_bytes.py`; one 1024² atlas and an emission map for the window panes): 9 recycled 4-row groups.
+  - The walls stand one prop lane (1 cell) outside the board edge; the lane pieces (troughs, moulds, bells) share the wall's transform, and their kerb marks the collision line. Floor strips are W{cols+2}.
+  - The three window segments have a second material, `PitBeam.shader`: additive light pools in vertex alpha.
   - Wall segments come from the start, mid or end set by run progress, left ≠ right, no repeat on one side; floor strips have A/B variants per board width.
   - The scroll freezes with the battle clock, stops when the final boss arrives (the casting-pit gate docks then), and decays on win or loss.
   - The top wall is the far wall at the farthest floor line on screen (spec §4.4).
@@ -58,7 +60,7 @@ The simulation is still 2D. The look follows style.md:
 - **Colour.** Foes are dark and desaturated, and only their eyes and boss weak spots glow; small yellow accents. Heroes are cool and dark, with one saturated hood in their colour.
 - **Animation.** Stepped at 10 fps: idle breath, hop, wind-up crouch, flyer bob, and a shrink-and-flash death.
 - **Hit feedback (unit shader).** White flash, ice overlay, and bleed noise seeded per unit.
-- **Lighting.** Per LIGHTING.md: a white key light tilted 10° (shadow strength 0.8, distance 36), a trilight ambient, linear fog from camera distance +2 to +14 cells in the background colour (38, 41, 55), and a copper furnace spot (the unit shader lights by the key light only, so the spot has no visible effect yet).
+- **Lighting.** Per LIGHTING.md: a white key light tilted 10° (shadow strength 0.8, distance 40), two blue-grey wall fills and a copper furnace spot (per-pixel additional lights, no shadows), a trilight ambient, and linear fog from camera distance +2 to +14 cells in the background colour (38, 41, 55).
 - **Pixel art.** Balls, items, gems, coins, shots and VFX are 16×16 sprites in a 256² point-filtered atlas, baked at startup.
   - Each element has a 64-step ramp from very dark to near white.
   - Numbers on the board use a 3×5 pixel font.

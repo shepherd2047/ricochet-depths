@@ -46,8 +46,8 @@ namespace Pit.EditorTools
             Set(so, "m_MainLightRenderingMode", 1);          // per pixel
             Set(so, "m_MainLightShadowsSupported", true);
             Set(so, "m_MainLightShadowmapResolution", 1024);
-            Set(so, "m_AdditionalLightsRenderingMode", 0);   // disabled
-            Set(so, "m_ShadowDistance", 30f);
+            Set(so, "m_AdditionalLightsRenderingMode", 1);   // per pixel: LIGHTING.md wall fills and furnace spot
+            Set(so, "m_ShadowDistance", 40f);   // LIGHTING.md: 45 kit units
             Set(so, "m_ShadowCascadeCount", 1);
             Set(so, "m_SoftShadowsSupported", true);
             Set(so, so.FindProperty("m_RequireDepthTexture") != null ? "m_RequireDepthTexture" : "m_SupportsCameraDepthTexture", false);    // URP 17 / 14 names
