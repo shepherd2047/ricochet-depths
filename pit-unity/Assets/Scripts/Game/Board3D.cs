@@ -5,7 +5,8 @@
 //     the pit widens over 3 s. Touches are cast back onto the board plane (ScreenToBoard).
 //   • The 2D World/Glow layers of Gfx are parented to WorldRoot, which lays design space flat onto the board plane.
 //   • One white key light with soft shadows, two blue-grey wall fills and the copper furnace spot (per-pixel additional
-//     lights), a trilight ambient, linear fog in the background colour, and Bloom whose threshold only the over-bright
+//     lights), a trilight ambient, the pit-axis fog past the far-wall line (in the shaders, from _PitLineY / _PitFarZ;
+//     built-in fog is off), and Bloom whose threshold only the over-bright
 //     Glow layer, emissive eyes and the scenery's window panes reach.
 //   • The pit-scene corridor kit (ASSEMBLY.md, spec §1.3a): no ceiling, a long corridor whose floor strips and wall
 //     segments scroll toward the hero and recycle in 4-row groups, start → mid → end segments by run progress, and the
@@ -178,11 +179,8 @@ namespace Pit.Game
             RenderSettings.ambientSkyColor = Sky;
             RenderSettings.ambientEquatorColor = Equator;
             RenderSettings.ambientGroundColor = Ground;
-            RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogStartDistance = 30;
-            RenderSettings.fogEndDistance = 50;
-            RenderSettings.fogColor = FogColor;
+            RenderSettings.fog = false;   // LIGHTING.md: the shaders fog along the pit instead (PitFog)
+            Shader.SetGlobalColor("_PitFogColor", FogColor);
             Shader.SetGlobalColor("_PitSky", Sky);
             Shader.SetGlobalColor("_PitEquator", Equator);
             Shader.SetGlobalColor("_PitGround", Ground);
@@ -280,7 +278,7 @@ namespace Pit.Game
             {
                 previewRoot = new GameObject("Hero Preview").transform;
                 previewRoot.SetParent(root, false);
-                previewRoot.localPosition = new Vector3(0, 0, -500);   // far above the pit, out of the board camera's view
+                previewRoot.localPosition = new Vector3(0, -500, -500);   // far above and below the pit: out of the board camera's view and the pit fog
                 var bg = new GameObject("body"); bg.layer = PreviewLayer;
                 previewBody = bg.transform; previewBody.SetParent(previewRoot, false);
                 previewMf = bg.AddComponent<MeshFilter>();
@@ -510,8 +508,6 @@ namespace Pit.Game
                 // walls follow the board edges every frame, so they slide out with an expansion (ASSEMBLY §4.4)
                 gr.L.transform.localPosition = new Vector3(-wx, 0, 0);
                 gr.R.transform.localPosition = new Vector3(wx, 0, 0);
-                bool vis = kBase + 4 * G < rows / 2 + 12;   // fully fogged beyond (ASSEMBLY §4.6)
-                if (gr.T.gameObject.activeSelf != vis) gr.T.gameObject.SetActive(vis);
                 prev = gr;
             }
 
@@ -534,9 +530,11 @@ namespace Pit.Game
                 gatePieces[2].transform.localScale = new Vector3((2 * wx + 2.4f) / 17f, 1, 1);
             }
 
-            // LIGHTING.md: fog follows the camera distance, the copper spot follows the board size
-            RenderSettings.fogStartDistance = Distance + 2 * K;
-            RenderSettings.fogEndDistance = Distance + 14 * K;
+            // LIGHTING.md: the fog starts at the far-wall line (the board's top edge) and follows the board's half length,
+            // which tweens with an expansion; every group stays drawn (fogged to 0.8 → 1 at the treadmill's end, ASSEMBLY §4.6)
+            Shader.SetGlobalFloat("_PitLineY", board.position.y);
+            Shader.SetGlobalFloat("_PitFarZ", r.Bh / 2);
+            // the copper spot follows the board size
             var centre = new Vector3(r.Bw / 2 * K, -r.Bh / 2 * K, 0);
             var sp = centre + Kit(-(r.Bw / 2) - 0.5f, (rows / 2 + 3) * C, 6);
             var aim = centre + Kit(r.Bw / 2, 0.15f * rows * C, 1.5f);

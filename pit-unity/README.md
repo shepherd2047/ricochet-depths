@@ -60,7 +60,7 @@ The simulation is still 2D. The look follows style.md:
 - **Colour.** Foes are dark and desaturated, and only their eyes and boss weak spots glow; small yellow accents. Heroes are cool and dark, with one saturated hood in their colour.
 - **Animation.** Stepped at 10 fps: idle breath, hop, wind-up crouch, flyer bob, and a shrink-and-flash death.
 - **Hit feedback (unit shader).** White flash, ice overlay, and bleed noise seeded per unit.
-- **Lighting.** Per LIGHTING.md: a white key light tilted 10° (shadow strength 0.8, distance 40), two blue-grey wall fills and a copper furnace spot (per-pixel additional lights, no shadows), a trilight ambient, and linear fog from camera distance +2 to +14 cells in the background colour (38, 41, 55).
+- **Lighting.** Per LIGHTING.md: a white key light tilted 10° (shadow strength 0.8, distance 40), two blue-grey wall fills and a copper furnace spot (per-pixel additional lights, no shadows), a trilight ambient, and pit-axis fog in the background colour (38, 41, 55). Built-in fog is off: `PitUnit` and `PitBeam` fog by distance along the pit past the far-wall line (0.45 one cell past it, 0.8 nine units on, 1 at the treadmill end), from the `_PitLineY` / `_PitFarZ` globals that follow the board through an expansion. Units take the same fog, so waves above the top row come out of the distance; their own glow (eyes, markings) takes only half, the window panes all of it. The light pools lose alpha with it.
 - **Pixel art.** Balls, items, gems, coins, shots and VFX are 16×16 sprites in a 256² point-filtered atlas, baked at startup.
   - Each element has a 64-step ramp from very dark to near white.
   - Numbers on the board use a 3×5 pixel font.

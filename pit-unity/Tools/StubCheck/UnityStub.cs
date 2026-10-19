@@ -111,7 +111,7 @@ namespace UnityEngine
     public enum FindObjectsSortMode { None, InstanceID }
     public class Object { public string name; public static void Destroy(Object o) { } public static T FindAnyObjectByType<T>() where T : Object { return null; } public static T[] FindObjectsByType<T>(FindObjectsSortMode m) where T : Object { return new T[0]; } public static void DontDestroyOnLoad(Object o) { } }
     public class ScriptableObject : Object { public static T CreateInstance<T>() where T : ScriptableObject { return System.Activator.CreateInstance<T>(); } }
-    public class Shader : Object { public static Shader Find(string n) { return null; } public static void SetGlobalColor(string n, Color c) { } }
+    public class Shader : Object { public static Shader Find(string n) { return null; } public static void SetGlobalColor(string n, Color c) { } public static void SetGlobalFloat(string n, float f) { } }
     public class Material : Object
     {
         public Material(Shader s) { }

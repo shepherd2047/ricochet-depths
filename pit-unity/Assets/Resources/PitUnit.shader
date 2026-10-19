@@ -1,11 +1,12 @@
 // Low-poly units and scenery (style.md §3, §4, §6): flat vertex colours, one main light with soft shadows, a
-// three-colour ambient (sky / equator / ground from _Pit* globals set by Board3D), linear fog, and the hit feedback:
+// three-colour ambient (sky / equator / ground from _Pit* globals set by Board3D), the pit-axis fog, and the hit feedback:
 // _Flash (white), _Ice (frozen overlay), _Bleed (noise patches seeded per unit). uv.x marks emissive faces, which are
 // pushed over the bloom threshold and tinted by _EmisTint. Written for URP.
 // Delivered models (_Textured = 1) take their colour from _MainTex instead and use uv as texture coordinates; with
 // _TexEmit = 1 their light painted accents (the foes' eyes, seams and flues, there is no emissive map yet) glow in
 // _EmisColor. _EmisMap (scenery: the window panes) adds its colour × _EmisMapGain.
-// Additional lights (the wall fills and the furnace spot) are per-pixel Lambert without shadows.
+// Additional lights (the wall fills and the furnace spot) are per-pixel Lambert without shadows. Fog covers everything
+// past the far-wall line; the units' own glow (eyes, markings) takes half of it so waves above the board glint through.
 Shader "Pit/Unit"
 {
     Properties
@@ -40,7 +41,6 @@ Shader "Pit/Unit"
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
             #pragma multi_compile _ _ADDITIONAL_LIGHTS
-            #pragma multi_compile_fog
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
@@ -49,6 +49,16 @@ Shader "Pit/Unit"
                 float4 _EmisTint, _EmisColor, _MainTex_ST;
             CBUFFER_END
             float4 _PitSky, _PitEquator, _PitGround;
+            // Pit-axis fog (pit-scene LIGHTING.md): by distance along the pit past the far-wall line (the board's top
+            // edge, world y _PitLineY), not by view depth, so tall walls and the floor beyond the line fog alike.
+            // z_local is the PitRoot-local z in kit units (board centre = 0), _PitFarZ = rows / 2 × 1.125.
+            float _PitLineY, _PitFarZ;
+            float4 _PitFogColor;
+            float PitFog(float worldY)
+            {
+                float dz = (worldY - _PitLineY) * 1.125, z = dz + _PitFarZ;
+                return 0.45 * smoothstep(0, 1.125, dz) + 0.35 * saturate((dz - 1.125) / 9) + 0.20 * saturate((z - 18) / 4.5);
+            }
             TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
             TEXTURE2D(_EmisMap); SAMPLER(sampler_EmisMap);
 
@@ -68,7 +78,6 @@ Shader "Pit/Unit"
                 float3 positionOS : TEXCOORD2;
                 float4 color : COLOR;
                 float2 uv : TEXCOORD3;
-                float fog : TEXCOORD4;
             };
 
             Varyings vert(Attributes v)
@@ -81,7 +90,6 @@ Shader "Pit/Unit"
                 o.positionOS = v.positionOS.xyz;
                 o.color = v.color;
                 o.uv = v.uv;
-                o.fog = ComputeFogFactor(p.positionCS.z);
                 return o;
             }
 
@@ -139,11 +147,12 @@ Shader "Pit/Unit"
                 float3 ice = lerp(float3(0.16, 0.42, 0.5), float3(0.8, 0.98, 0.92), rim) * (0.6 + 0.4 * ndl);
                 col = lerp(col, ice, _Ice * 0.8);
 
-                float3 glow = _Textured > 0.5 ? _EmisColor.rgb : albedo;
-                col += glow * emit * _EmisBoost * _EmisTint.rgb;
+                float3 glow = (_Textured > 0.5 ? _EmisColor.rgb : albedo) * emit * _EmisBoost * _EmisTint.rgb;
                 if (_EmisMapGain > 0) col += SAMPLE_TEXTURE2D(_EmisMap, sampler_EmisMap, i.uv).rgb * _EmisMapGain;
                 col = lerp(col, float3(1, 1, 1), _Flash * 0.85);
-                col = MixFog(col, i.fog);
+                glow *= 1 - _Flash * 0.85;
+                float f = PitFog(i.positionWS.y);
+                col = lerp(col, _PitFogColor.rgb, f) + glow * (1 - 0.5 * f);
                 return half4(col, 1);
             }
             ENDHLSL
