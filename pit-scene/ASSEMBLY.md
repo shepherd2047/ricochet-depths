@@ -82,6 +82,15 @@ left  segment: position (-cols/2*1.125, 0, zc), rotY = +90     (prefab forward -
 right segment: position (+cols/2*1.125, 0, zc), rotY = -90
 floor strip  : position (0, 0, zc), T1_FloorStrip_W{cols}_B if hash(seed, G, 7) % 3 == 0 else _A
 ```
+Floor strip by board width (swap all strips on expansion, §4.4):
+
+| Board | Strip |
+|---|---|
+| 7×9 | `T1_FloorStrip_W7_A/B` |
+| 9×11 | `T1_FloorStrip_W9_A/B` |
+| 11×13 | `T1_FloorStrip_W11_A/B` |
+| 13×15 | `T1_FloorStrip_W13_A/B` |
+
 Make the left segment, right segment and floor strip children of one `Group` object, so scrolling moves one transform per group. In `assemble.py` the y coordinate is the pit's along-axis; in Unity it is PitRoot-local z.
 
 ### 4.2 Scroll (spec §1.3a)
@@ -96,7 +105,7 @@ Make the left segment, right segment and floor strip children of one `Group` obj
 - Use absolute `G` in every hash, not the screen slot, so a group keeps its look while it scrolls. (`assemble.py` renders one frozen moment, so there G = g.)
 
 ### 4.3 Which set a group uses (progress)
-A group's progress is the run time at which its rows reach the board's far row:
+Progress is **time-based, not spatial** (spec §1.3a: the turn number the row corresponds to, divided by the final boss turn). A group's progress is the turn at which its rows reach the board's far row, over the final boss turn:
 ```
 row_turn = turn_now + (kc_screen - rows/2)       // kc_screen = 4g + 1.5 when the group is (re)drawn
 p        = clamp(row_turn / final_turn, 0, 1)    // final_turn = turn the final boss arrives (preview: 60)
@@ -129,6 +138,7 @@ Each expansion adds a column on each side. The 3-second animation runs with the 
 Collision walls stay in game code (2D), at the same x values as the wall faces.
 
 ### 4.5 End-of-corridor gate (the boss emerges from it)
+- Spec §1.3a: when the final boss enters, the scroll speed drops to 0 and the boss walks from the corridor end onto the board. The gate is that end. It rides in out of the fog on the last few turns before the final boss, and it is docked exactly when the scroll stops.
 - The gate's front face is at `k_gate = rows/2 + 3 + (final_turn − turn)`. It scrolls with the corridor and **stops 3 cells beyond the board's far row** on the final boss turn.
 - Spawn it once `k_gate ≤ 20`, the far end of the live run. It enters out of the fog.
 - Positions:
