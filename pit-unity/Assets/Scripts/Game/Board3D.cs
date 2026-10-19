@@ -55,7 +55,7 @@ namespace Pit.Game
             { "delver", "enemy_shambler" }, { "burr", "enemy_shambler" }, { "gulper", "enemy_slab" }, { "hurler", "enemy_lobber" },
         };
         // six heroes, four models (art-bible §4): the closest look per twist; Scatterjack and Fanfare share one
-        internal static readonly Dictionary<string, string> HeroModels = new Dictionary<string, string>
+        public static readonly Dictionary<string, string> HeroModels = new Dictionary<string, string>
         {
             { "tinker", "hero_tinker" }, { "needle", "hero_wren" }, { "bulwark", "hero_osk" }, { "ricco", "hero_juno" },
             { "scatter", "hero_wren" }, { "fanfare", "hero_osk" },
@@ -79,6 +79,11 @@ namespace Pit.Game
         readonly List<int> gone = new List<int>();
         View hero;
         string heroMesh;
+        Models.Asset heroModel;
+        // baked hero clips (pit-art rig_hero.py → Tools/bake_hero_anim.py), stepped at their baked 10 fps
+        string heroClip;
+        float heroT, heroClipAt, heroHitAt = -9, heroLastTime, heroLastHurt;
+        Run heroRun;
 
         // camera basis and lens of the last fitted frame, for ScreenToBoard
         Vector3 camPos, camRight = Vector3.right, camUp = Vector3.up, camFwd = Vector3.forward;
@@ -325,7 +330,10 @@ namespace Pit.Game
                 previewBody.localScale = new Vector3(k, k, k);
                 previewId = heroId;
             }
-            // models face +y; turn to the camera, sway ±25° at the stepped animation rate
+            // baked clips: the preview breathes in Idle; models face +y, turn to the camera, sway ±25° at the stepped rate
+            Models.Clip idle;
+            var pm = HeroModels.ContainsKey(heroId) ? Models.Model(HeroModels[heroId], true, false, unitShader) : null;
+            if (pm != null && pm.Clips != null && pm.Clips.TryGetValue("Idle", out idle)) previewMf.sharedMesh = idle.At(t);
             previewBody.localRotation = Quaternion.Euler(0, 0, 180 + 25 * Mathf.Sin(Step(t) * 0.9f));
             previewFrame = Time.frameCount;
             if (!previewCam.enabled) previewCam.enabled = true;
@@ -804,13 +812,12 @@ namespace Pit.Game
         void Hero(Run r)
         {
             if (hero == null) { hero = NewView(); hero.Go.name = "hero"; }
-            bool show = r.Mode != Mode.GameOver;
-            if (hero.Go.activeSelf != show) hero.Go.SetActive(show);
-            if (!show) return;
+            if (!hero.Go.activeSelf) hero.Go.SetActive(true);   // stays down on the game-over screen, holding Death
             if (heroMesh != r.Hero.Id)
             {
                 string mk;
                 var model = HeroModels.TryGetValue(r.Hero.Id, out mk) ? Models.Model(mk, true, false, unitShader) : null;
+                heroModel = model;
                 hero.Mf.sharedMesh = model != null ? model.Mesh : Models.Hero(r.Hero.Id, r.Hero.Color);
                 hero.Mr.sharedMaterial = model != null ? model.Mat : unitMat;
                 // a model fills the hero's circle, but stands no taller than one cell
@@ -821,12 +828,14 @@ namespace Pit.Game
             var p = r.P;
             float st = Step(r.Time);
             bool moving = r.InputX != 0 || r.InputY != 0;
-            float bob = moving ? 0.06f * Mathf.Abs(Mathf.Sin(st * 9)) : (Mathf.Repeat(st, 1) >= 0.5f ? 0.03f : 0);
+            bool animated = heroModel != null && heroModel.Clips != null && HeroAnimate(r, moving);
+            // the procedural stand-in (no baked clips) bobs and leans instead
+            float bob = animated ? 0 : moving ? 0.06f * Mathf.Abs(Mathf.Sin(st * 9)) : (Mathf.Repeat(st, 1) >= 0.5f ? 0.03f : 0);
             float size = p.R * 2 * K * 1.15f;
             hero.Go.transform.localPosition = P(p.X, p.Y, -bob);
             hero.Go.transform.localScale = new Vector3(size, size, size);
             // faces its aim; leans a little into the move
-            float lean = moving ? 12 : 0;
+            float lean = moving && !animated ? 12 : 0;
             hero.Go.transform.localRotation = Quaternion.Euler(-r.InputY * lean, r.InputX * lean, Mathf.Round((p.Aim - 90) / 7.5f) * 7.5f);
             hero.Mpb.SetFloat("_Flash", p.HurtT > 0 ? 0.6f : 0);
             hero.Mpb.SetFloat("_Ice", p.RootT > 0 ? 1 : 0);
@@ -834,6 +843,37 @@ namespace Pit.Game
             hero.Mpb.SetFloat("_Seed", 0.3f);
             hero.Mpb.SetColor("_EmisTint", Color.white);
             hero.Mr.SetPropertyBlock(hero.Mpb);
+        }
+
+        /// <summary>
+        /// Picks the hero's clip (Death on dying and game over, Victory once the final boss falls, Hit for a moment after
+        /// each hurt, Shoot while a volley is out, Walk while moving, else Idle) and shows its stepped frame. The clip
+        /// clock follows the sim's time, so pauses and game speed carry over, and real time once the run is over.
+        /// </summary>
+        bool HeroAnimate(Run r, bool moving)
+        {
+            var clips = heroModel.Clips;
+            if (r != heroRun) { heroRun = r; heroT = 0; heroLastTime = r.Time; heroClip = null; heroHitAt = -9; heroLastHurt = 0; }
+            heroT += r.IsOver ? Time.unscaledDeltaTime : Mathf.Max(0, r.Time - heroLastTime);
+            heroLastTime = r.Time;
+            var p = r.P;
+            if (p.HurtT > heroLastHurt) heroHitAt = heroT;   // HurtT is reset to its full length on every hit
+            heroLastHurt = p.HurtT;
+
+            Models.Clip c;
+            string want =
+                r.Mode == Mode.Dying || r.Mode == Mode.GameOver ? "Death" :
+                r.Mode == Mode.Victory || r.Mode == Mode.Clearing && r.Won ? "Victory" :
+                clips.TryGetValue("Hit", out c) && heroT - heroHitAt < c.Length ? "Hit" :
+                r.Volley != null ? "Shoot" :
+                moving ? "Walk" : "Idle";
+            if (!clips.TryGetValue(want, out c)) { want = "Idle"; if (!clips.TryGetValue(want, out c)) return false; }
+            if (want == "Hit" && heroClip == "Hit" && heroHitAt > heroClipAt) heroClipAt = heroHitAt;   // hit again: restart
+            if (want != heroClip) { heroClip = want; heroClipAt = want == "Hit" ? heroHitAt : heroT; }
+            // Shoot is a one-shot recoil: a long volley repeats it
+            if (want == "Shoot" && heroT - heroClipAt >= c.Length) heroClipAt = heroT;
+            hero.Mf.sharedMesh = c.At(heroT - heroClipAt);
+            return true;
         }
     }
 }

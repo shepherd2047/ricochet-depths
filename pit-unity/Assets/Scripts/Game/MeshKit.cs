@@ -400,7 +400,19 @@ namespace Pit.Game
         // ------------------------------------------------------------ delivered models (pit-art/models/lowpoly)
         /// <summary>A delivered low-poly model: mesh in unit space (feet at z = 0, rising along -z), its material and
         /// its half-extents (x, y footprint from the pivot; z height).</summary>
-        public sealed class Asset { public Mesh Mesh; public Material Mat; public Vector3 Half; }
+        public sealed class Asset { public Mesh Mesh; public Material Mat; public Vector3 Half; public Dictionary<string, Clip> Clips; }
+        /// <summary>A baked clip: one mesh per stepped frame (no blending between them, style.md §6).</summary>
+        public sealed class Clip
+        {
+            public Mesh[] Frames; public bool Loop; public float Fps;
+            public float Length { get { return Frames.Length / Fps; } }
+            /// <summary>The frame shown t seconds into the clip; a one-shot clip holds its last frame.</summary>
+            public Mesh At(float t)
+            {
+                int i = Mathf.FloorToInt(Mathf.Max(0, t) * Fps);
+                return Frames[Loop ? i % Frames.Length : Mathf.Min(i, Frames.Length - 1)];
+            }
+        }
         static readonly Dictionary<string, Asset> assets = new Dictionary<string, Asset>();
 
         /// <summary>
@@ -445,6 +457,7 @@ namespace Pit.Game
             if (agree < 0) for (int i = 0; i < ni; i += 3) { int x = tri[i + 1]; tri[i + 1] = tri[i + 2]; tri[i + 2] = x; }
             var m = new Mesh { name = name };
             m.SetVertices(pos); m.SetNormals(nor); m.SetColors(col); m.SetUVs(0, uv); m.SetTriangles(tri, 0, true);
+            var clips = Clips(name, s, uv, col, tri);
             var mat = new Material(shader) { name = name };
             mat.SetTexture("_MainTex", Resources.Load<Texture2D>("Models/" + name + "_albedo"));
             mat.SetFloat("_Textured", 1);
@@ -453,6 +466,7 @@ namespace Pit.Game
             {
                 Mesh = m, Mat = mat,
                 Half = new Vector3(Mathf.Max(-mn.x, mx.x), Mathf.Max(-mn.y, mx.y), mx.z - mn.z),
+                Clips = clips,
             };
             assets[name] = a;
             if (glow) MaxFoeVerts = Mathf.Max(MaxFoeVerts, nv); else HeroVerts = Mathf.Max(HeroVerts, nv);
@@ -460,6 +474,48 @@ namespace Pit.Game
         }
 
         static float F(byte[] b, int o) { return System.BitConverter.ToSingle(b, o); }
+
+        /// <summary>
+        /// Loads Resources/Models/&lt;name&gt;_anim.bytes (Tools/bake_hero_anim.py: the rig's clips sampled at a stepped
+        /// fps, positions as int16 over the clip bounds, normals as int8) into one mesh per frame, sharing the rest
+        /// mesh's uvs, colours and (already rewound) triangles. Null when the model has no baked clips.
+        /// </summary>
+        static Dictionary<string, Clip> Clips(string name, float s, List<Vector2> uv, List<Color32> col, List<int> tri)
+        {
+            var ta = Resources.Load<TextAsset>("Models/" + name + "_anim");
+            if (ta == null) return null;
+            var b = ta.bytes;
+            int nv = System.BitConverter.ToInt32(b, 0), nc = System.BitConverter.ToInt32(b, 4), o = 36;
+            if (nv != uv.Count) return null;
+            float fps = F(b, 8);
+            var mn = new Vector3(F(b, 12), F(b, 16), F(b, 20)); var span = new Vector3(F(b, 24), F(b, 28), F(b, 32)) - mn;
+            int stride = (nv * 9 + 3) & ~3;
+            var clips = new Dictionary<string, Clip>();
+            var pos = new List<Vector3>(nv); var nor = new List<Vector3>(nv);
+            for (int c = 0; c < nc; c++)
+            {
+                string cn = System.Text.Encoding.ASCII.GetString(b, o + 1, b[o]); o += 1 + b[o];
+                var clip = new Clip { Loop = b[o] != 0, Fps = fps, Frames = new Mesh[System.BitConverter.ToInt32(b, o + 1)] };
+                o += 5;
+                for (int f = 0; f < clip.Frames.Length; f++, o += stride)
+                {
+                    pos.Clear(); nor.Clear();
+                    for (int i = 0, q = o; i < nv; i++, q += 9)
+                    {
+                        float x = mn.x + (System.BitConverter.ToInt16(b, q) + 32768) / 65535f * span.x;
+                        float y = mn.y + (System.BitConverter.ToInt16(b, q + 2) + 32768) / 65535f * span.y;
+                        float z = mn.z + (System.BitConverter.ToInt16(b, q + 4) + 32768) / 65535f * span.z;
+                        pos.Add(new Vector3(s * x, s * y, -z));
+                        nor.Add(new Vector3(s * (sbyte)b[q + 6], s * (sbyte)b[q + 7], -(sbyte)b[q + 8]) / 127f);
+                    }
+                    var m = new Mesh { name = name + "_" + cn + f };
+                    m.SetVertices(pos); m.SetNormals(nor); m.SetColors(col); m.SetUVs(0, uv); m.SetTriangles(tri, 0, true);
+                    clip.Frames[f] = m;
+                }
+                clips[cn] = clip;
+            }
+            return clips;
+        }
 
         // ------------------------------------------------------------ corridor kit (pit-scene/kit, ASSEMBLY.md)
         static readonly Dictionary<string, Mesh> scenery = new Dictionary<string, Mesh>();
