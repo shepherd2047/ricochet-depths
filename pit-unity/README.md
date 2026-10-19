@@ -49,12 +49,16 @@ The simulation is still 2D. The look follows style.md:
   - That gives a distance of 14.65 units for 7×9 (style.md §2 says about 15) and 18.2 for 9×11.
   - The camera follows the board size every frame, so it pulls back over the 3 s expansion.
   - Touches are raycast onto the board plane (`Board3D.ScreenToBoard`) for taps and the joystick.
-- **Scenery.** Low-poly floor tiles, 8 modular wall pieces, and broken pillars sinking into the fog beyond the walls.
-- **Units.** One original low-poly mesh per foe type, plus three bosses and a hero per character. All are built in code (`MeshKit`): flat-shaded, coloured by vertex, no textures.
+- **Scenery: a treadmill corridor** (spec §1.3a; pit-scene `ASSEMBLY.md`, `LIGHTING.md`). The player and camera stay put while the floor, walls and pickups scroll toward the player at 1 cell per turn.
+  - The corridor is pit-scene's T1 kit (`Resources/Scene`, one 1024² atlas): 9 recycled 4-row groups.
+  - Wall segments come from the start, mid or end set by run progress, left ≠ right, no repeat on one side; floor strips have A/B variants per board width.
+  - The scroll freezes with the battle clock, stops when the final boss arrives (the casting-pit gate docks then), and decays on win or loss.
+  - The top wall is the far wall at the farthest floor line on screen (spec §4.4).
+- **Units.** pit-art's delivered textured models where they exist (`Resources/Models`); the rest are original low-poly meshes built in code (`MeshKit`), flat-shaded and coloured by vertex.
 - **Colour.** Foes are dark and desaturated, and only their eyes and boss weak spots glow; small yellow accents. Heroes are cool and dark, with one saturated hood in their colour.
 - **Animation.** Stepped at 10 fps: idle breath, hop, wind-up crouch, flyer bob, and a shrink-and-flash death.
 - **Hit feedback (unit shader).** White flash, ice overlay, and bleed noise seeded per unit.
-- **Lighting.** One white key light tilted 10° with soft shadows, a trilight ambient, and linear fog from 30 to 50 in the background colour (38, 41, 55).
+- **Lighting.** Per LIGHTING.md: a white key light tilted 10° (shadow strength 0.8, distance 36), a trilight ambient, linear fog from camera distance +2 to +14 cells in the background colour (38, 41, 55), and a copper furnace spot (the unit shader lights by the key light only, so the spot has no visible effect yet).
 - **Pixel art.** Balls, items, gems, coins, shots and VFX are 16×16 sprites in a 256² point-filtered atlas, baked at startup.
   - Each element has a 64-step ramp from very dark to near white.
   - Numbers on the board use a 3×5 pixel font.
