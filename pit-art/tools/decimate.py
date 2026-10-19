@@ -90,7 +90,16 @@ def import_model(path):
 
 def ensure_color_material(obj):
     """Make sure the source's colour is readable by a DIFFUSE bake: if no material samples an image,
-    wire the first colour attribute (TripoSR/vertex-colour output) into the base colour."""
+    wire the first colour attribute (TripoSR/vertex-colour output) into the base colour.
+    Metallic is forced to 0: Cycles' diffuse-colour pass is black for metals (TRELLIS exports metallic=1)."""
+    for m in obj.data.materials:
+        if not (m and m.node_tree):
+            continue
+        for n in m.node_tree.nodes:
+            if n.type == "BSDF_PRINCIPLED":
+                for link in list(n.inputs["Metallic"].links):
+                    m.node_tree.links.remove(link)
+                n.inputs["Metallic"].default_value = 0.0
     has_image = any(
         n.type == "TEX_IMAGE" and n.image
         for m in obj.data.materials if m and m.node_tree for n in m.node_tree.nodes

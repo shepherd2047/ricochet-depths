@@ -37,12 +37,23 @@ Clean room: I read only `ballpit-spec/style.md` and `ballpit-spec/spec.md` (arch
 - Not tested: Mixamo upload (needs your Adobe login), Unity import of the FBX, and heroes through any 3D tool.
 - **Budget conflict:** an 800-tri hero with hard flat normals is ~2400 Unity verts, which breaks style.md's ≤ 1000. Use `--normals smooth` plus a derivative-normal flat shader, or lower the targets.
 
-## Heroes via TRELLIS (blocked, 2026-10-19)
+## Heroes via TRELLIS (done, 2026-10-19)
 
 - Licence verified: `trellis-community/TRELLIS` is tagged MIT and loads `JeffreyXiang/TRELLIS-image-large`, which redirects to the official `microsoft/TRELLIS-image-large` (MIT). Recorded in art-bible.md §8.
-- **The browser pane can't feed it a local image.** The upload button opens a native file chooser. Clipboard paste and in-page clipboard writes are denied ("Write permission denied"). The pane can't reach a localhost file server from a public page. The HF login can't be carried to the app at top level, because the iframe gets its ZeroGPU auth from the parent page.
-- The headless API (`tools/trellis_space.py`) works up to generation, then stops at "exceeded your ZeroGPU quota (120s requested vs. 0s left)" when anonymous.
-- **To unblock:** the user runs `hf auth login` in a terminal (their own token, typed by them). Then run `uv run --with gradio_client python tools/trellis_space.py models/raw concept/hero_*.jpg`, then decimate.py at ~800 tris. Free accounts get a small daily ZeroGPU allowance, so 4 heroes may need to be spread over 2 days.
+- The browser pane couldn't feed the Space a local file (native file chooser; clipboard denied). After the user ran `hf auth login` themselves, `tools/trellis_space.py` used the cached token headless. **All 4 heroes took 2 min 12 s in total, with no quota error.**
+- Raw output: 8–23k tris with a 1024 px texture, already Z-up and facing −Y (decimate.py defaults, no axis flags). Quality is much better than TripoSR: clean A-pose limbs, props kept (Tinker's launcher, Wren's lamp pole, Osk's hat).
+- decimate.py fix: TRELLIS materials are metallic=1, which makes Cycles' diffuse-colour bake black. The script now forces Metallic to 0 before baking.
+- Low-poly results (`models/lowpoly/hero_<key>.glb`, 512 px albedo, 1.0 m tall, smooth normals):
+
+| Hero | Tris | Unity verts | Note |
+|---|---|---|---|
+| Tinker | 700 | ~960 | cobalt scarf and wristband read well |
+| Wren | 650 | ~993 | violet hood lining and lantern read well |
+| Osk | 550 | ~905 | jade sash came out grey-green; needs a paint pass |
+| Juno | 700 | ~972 | magenta cap and sling bands mostly lost; needs a paint pass |
+
+  800 tris would have meant 1085–1273 Unity verts (UV seams), over style.md's 1000, so the targets were stepped down until each hero fit. Settings: `--tex 512 --quantize 16 --height 1.0 --vrange 0.12,0.50 --accent-vrange 0.45,0.85 --accent-sat 0.5 --normals smooth`. With an accent cutoff of 0.4, skin counted as an accent and Tinker's blue was lost.
+- Preview sheet: `models/lowpoly/_lowpoly_heroes.png`. Next for heroes: a signature-colour paint pass for Osk and Juno, then Mixamo (user login).
 
 ## Next
 
