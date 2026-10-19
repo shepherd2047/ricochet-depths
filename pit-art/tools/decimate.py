@@ -44,6 +44,8 @@ def parse_args():
     ap.add_argument("--front", default="-y", help="source facing axis after import")
     ap.add_argument("--vrange", default="", help="lo,hi: remap texture value (HSV V) into this range")
     ap.add_argument("--accent-vrange", default="", help="lo,hi: value range for saturated accent colours")
+    ap.add_argument("--sat-boost", type=float, default=1.0,
+                    help="multiply texture saturation (image-to-3D output is washed out; 1.6-2.0 restores it)")
     ap.add_argument("--accent-sat", type=float, default=0.25, help="saturation that marks an accent colour")
     ap.add_argument("--preview", default="", help="optional PNG turntable-style preview render")
     return ap.parse_args(argv)
@@ -240,8 +242,8 @@ def bake(src, low, size):
     bk.use_pass_indirect = False
     bk.use_pass_color = True
     dims = max(low.dimensions)
-    bk.cage_extrusion = dims * 0.02
-    bk.max_ray_distance = dims * 0.06
+    bk.cage_extrusion = dims * 0.05
+    bk.max_ray_distance = dims * 0.15
     bk.margin = 2
     bpy.ops.object.select_all(action="DESELECT")
     src.select_set(True)
@@ -280,6 +282,14 @@ def quantize(img, k, accent_sat):
     px[:, :3] = rgb
     img.pixels[:] = px.ravel()
     log(f"posterised to {k} colours ({n_acc} reserved for accents, {acc.mean() * 100:.1f}% px)")
+
+
+def boost_saturation(img, k):
+    px = np.array(img.pixels[:], dtype=np.float32).reshape(-1, 4)
+    grey = px[:, :3].mean(1, keepdims=True)
+    px[:, :3] = np.clip(grey + (px[:, :3] - grey) * k, 0.0, 1.0)
+    img.pixels[:] = px.ravel()
+    log(f"saturation x{k}")
 
 
 def remap_values(img, vrange, accent_vrange, accent_sat):
@@ -380,6 +390,8 @@ def main():
     decimate(low, a.tris)
     unwrap(low)
     img = bake(src, low, a.tex)
+    if a.sat_boost != 1.0:
+        boost_saturation(img, a.sat_boost)
     if a.quantize:
         quantize(img, a.quantize, a.accent_sat)
     if a.vrange or a.accent_vrange:

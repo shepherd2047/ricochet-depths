@@ -25,10 +25,10 @@ Shape language:
 |---|---|---|---|
 | Scenery | 10–33 %, mostly 10–20 % | 15–45 % | theme hue only |
 | Enemies | body 0–30 %, accents 55–85 % | accents 35–45 % | warm-dark + amber accent; emissive only on eyes / vents |
-| Heroes | 12–40 %, rare 50 % | one block at S≈90 %, V≈12 % | cool cloth + one signature colour |
+| Heroes | **bold: 30–90 %** (user override, 2026-10-19) | 60–95 % colour blocks | bright toy-like blocks + signature colour; deliberately above style.md's 12–40 % |
 | Balls / VFX | 60–100 % | 40–80 % | the only things that bloom |
 
-Order of brightness: scenery < enemies < heroes < balls. Shared enemy body ramp (all themes): `#1F1815` `#38302A` `#4C413D`; enemy accent `#D1BC7D` / `#B29562`.
+Order of brightness: scenery < enemies < heroes < balls. **Colour split (user decision):** heroes use bold, saturated colours; enemies and the boss keep the dark warm palette below, so the two always read apart. Shared enemy body ramp (all themes): `#1F1815` `#38302A` `#4C413D`; enemy accent `#D1BC7D` / `#B29562`.
 
 ---
 
@@ -55,6 +55,8 @@ Theme 1 local light: one copper spot light (`#D98841`, low intensity) from a "fu
 | **Wren Halloway** | Lamplighter scout. Long hooded oilskin coat, tall thin lamp-pole carried like a spear with a caged lantern at the tip, rolled-up trousers, high boots. | violet `#11031F` / `#822BD9` (lantern glass + hood lining) | `#322D38` `#5A5261` | Pierces until first wall hit |
 | **Brother Osk** | Stout ferryman-monk from the flooded levels. Barrel-shaped, short cape, wide-brim rain hat, a short oar with a stone ring set in the blade, bead string across chest. | jade `#031F18` / `#2BD9AD` (sash + ring stone) | `#2D3835` `#52615D` | No minor balls; extra copies of one ball |
 | **Juno Quill** | Surveyor-cartographer. Short cropped jacket with many pockets, map tube on back, brass sighting-compass monocle, Y-shaped surveyor's sling with a plumb-bob pouch. | magenta `#1F0315` / `#D92B9F` (map-tube cap + sling bands) | `#382D34` `#61525C` | Lobbed shots (arcing) |
+
+**Bold pass (2026-10-19):** concepts were regenerated with bold blocks. Tinker = red knit cap, cobalt scarf, mustard apron, teal shirt, navy trousers, red boots, gold launcher (`concept/hero_tinker.jpg`, model `models/lowpoly/hero_tinker.glb`). Bold Wren / Osk / Juno concepts are in `concept/v2/` but not yet converted; their current models are the old dark v1 and are parked. The hex ramps in the table above are the v1 values; the signature hue per hero still holds.
 
 Hero rules: skin tones in V 35–50 %; no pure black; the signature colour must cover ≥ 10 % of the silhouette's front so heroes read against warm enemies.
 

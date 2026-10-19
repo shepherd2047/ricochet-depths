@@ -55,8 +55,25 @@ Clean room: I read only `ballpit-spec/style.md` and `ballpit-spec/spec.md` (arch
   800 tris would have meant 1085–1273 Unity verts (UV seams), over style.md's 1000, so the targets were stepped down until each hero fit. Settings: `--tex 512 --quantize 16 --height 1.0 --vrange 0.12,0.50 --accent-vrange 0.45,0.85 --accent-sat 0.5 --normals smooth`. With an accent cutoff of 0.4, skin counted as an accent and Tinker's blue was lost.
 - Preview sheet: `models/lowpoly/_lowpoly_heroes.png`. Next for heroes: a signature-colour paint pass for Osk and Juno, then Mixamo (user login).
 
+## Colour pass and starter set (2026-10-19)
+
+- The user found the models colourless ("no colour at all"). Causes: style.md's low value ranges, muted concepts, and image-to-3D tools that wash colour out. `decimate.py` gained `--sat-boost`, and the bake cage/ray distance was widened (0.05 / 0.15 of the size), which fixed black blotches.
+- **Decision (user):** heroes get bold saturated colours; monsters keep the original dark tones, so they're easy to tell apart.
+- **Starter set for now (user: "one character is enough"):**
+
+| Model | Source | Tris | Unity verts |
+|---|---|---|---|
+| `hero_tinker.glb` (bold) | TRELLIS from bold concept | 700 | ~975 |
+| `enemy_shambler.glb` (dark) | TripoSR | 300 | ≤ 382 |
+| `enemy_brute.glb` (dark) | TripoSR | 350 | ≤ 382 |
+| `enemy_spitter.glb` (dark) | TripoSR | 300 | ≤ 382 |
+
+  Tinker settings: `--tex 512 --quantize 16 --accent-sat 1.01 --sat-boost 1.2 --height 1.0 --normals smooth`. Preview sheet: `models/lowpoly/_starter_set.png` (each model is framed on its own, so sizes on the sheet aren't to scale).
+- **Not done:** the free TRELLIS ZeroGPU quota ran out (reset in about 21.5 h from 13:52 on 2026-10-19). So the bold Wren / Osk / Juno concepts (`concept/v2/`) aren't converted, and the 3 monsters stay on the lower-quality TripoSR meshes: blobby, very dark, with small accents. Redoing them via TRELLIS from the original dark concepts once the quota resets would improve shape and detail.
+- The test bold Shambler was discarded. The old dark Wren / Osk / Juno low-poly models are still in `models/lowpoly/` but parked.
+
 ## Next
 
 1. Done: the 7 remaining concepts are generated (13 Figma AI calls in total). Mender's wax is lighter than the enemy value range; decimate.py's `--vrange` pulls it down.
-2. Sign in to HF, then run TRELLIS.2 on the 4 heroes and decimate them to ~800 tris.
+2. After the quota resets: TRELLIS for Shambler / Brute / Spitter (dark concepts), then the bold Wren / Osk / Juno when more heroes are wanted.
 3. Analysis side: run the similarity check on `concept/` and `models/lowpoly/`.
