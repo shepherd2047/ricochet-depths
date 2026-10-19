@@ -48,6 +48,7 @@ REGIONS = {
     "iron":    ((768, 0, 1024, 256), "fit", (CELL, CELL)),
     "clay":    ((768, 256, 1024, 512), "fit", (CELL, CELL)),
     "bronze":  ((768, 512, 1024, 768), "fit", (CELL, CELL)),
+    "pilaster": ((768, 832, 832, 1024), "fit", (0.28, 1.1)),
 }
 SWATCH_NAMES = ["iron", "iron_hi", "chain", "soot", "mortar", "wood", "copper", "rust",
                 "stone_dk", "stone", "teal", "deep", "clay", "bronze", "patina", "water"]
@@ -282,7 +283,7 @@ def alcove(b, x0, x1, z1, depth, back_region, lintel=True):
     b.face([(x0, 0.0, PLINTH), (x1, 0.0, PLINTH), (x1, depth, PLINTH), (x0, depth, PLINTH)], "stone", (0, 0, 1))
 
 
-def diamond_link(b, centre, turned, half_len=0.085, half_w=0.05, r=0.02):
+def diamond_link(b, centre, turned, half_len=0.13, half_w=0.08, r=0.034):
     cx, cy, cz = centre
     if turned:
         pts = [(cx, cy, cz + half_len), (cx + half_w, cy, cz), (cx, cy, cz - half_len), (cx - half_w, cy, cz)]
@@ -293,9 +294,16 @@ def diamond_link(b, centre, turned, half_len=0.085, half_w=0.05, r=0.02):
     b.sweep(pts, r, 3, "sw_chain", closed=True, ref=ref)
 
 
-def chain(b, x, y, z_top, links, pitch=0.13):
+def chain(b, x, y, z_top, links, pitch=0.2, **link):
     for i in range(links):
-        diamond_link(b, (x, y, z_top - 0.085 - i * pitch), i % 2 == 1)
+        diamond_link(b, (x, y, z_top - 0.13 - i * pitch), i % 2 == 1, **link)
+
+
+def post_face(b, x0, x1, y, z0, z1, n=4):
+    """Front face of an iron post, split into n stacked quads that each map the riveted 'pilaster' strip."""
+    for i in range(n):
+        za, zb = z0 + (z1 - z0) * i / n, z0 + (z1 - z0) * (i + 1) / n
+        b.face([(x0, y, za), (x0, y, zb), (x1, y, zb), (x1, y, za)], "pilaster", (0, -1, 0))
 
 
 # ---------------------------------------------------------------- pieces
@@ -330,29 +338,27 @@ def wall_iron_rib():
         b.face(pts, "brick_a", (n, 0, 0))
     b.face([(-HALF, 0.04, PLINTH), (HALF, 0.04, PLINTH), (HALF, rec, PLINTH), (-HALF, rec, PLINTH)], "stone", (0, 0, 1))
     # I-beam: flange flush with the collision face, web back into the recess
-    b.box((-0.16, 0.0, PLINTH), (0.16, 0.07, COPE_Z0), "iron", skip=("-z", "+z", "+y"))
+    post_face(b, -0.16, 0.16, 0.0, PLINTH, COPE_Z0)
+    b.box((-0.16, 0.0, PLINTH), (0.16, 0.07, COPE_Z0), "iron", skip=("-z", "+z", "+y", "-y"))
     b.box((-0.04, 0.07, PLINTH), (0.04, rec, COPE_Z0), "sw_iron", skip=("-z", "+z", "+y", "-y"))
     # tie band near the top + rivets
     b.box((-HALF, -0.02, 3.86), (HALF, rec, 4.1), "iron", skip=("+y", "-x", "+x"))
-    for z in [0.8 + 0.42 * i for i in range(8)]:
-        for x in (-0.11, 0.11):
-            b.box((x - 0.025, -0.03, z - 0.025), (x + 0.025, 0.0, z + 0.025), "sw_iron_hi", skip=("+y",))
     for x in (-0.42, -0.26, 0.26, 0.42):
         b.box((x - 0.025, -0.05, 3.955), (x + 0.025, -0.02, 4.005), "sw_iron_hi", skip=("+y",))
     return b
 
 
-def wall_chain(strands=((-0.22, 6), (0.0, 9), (0.22, 5)), slack=False):
+def wall_chain(strands=((-0.2, 5), (0.02, 8), (0.22, 4)), slack=False):
     b = Builder()
     plinth_and_cope(b)
     alcove(b, -0.42, 0.42, 3.75, 0.34, "brick_b")
     # hoist bracket across the alcove top + chain strands
     b.box((-0.4, 0.06, 3.58), (0.4, 0.34, 3.72), "iron", skip=("+y",))
     for x, n in strands:
-        chain(b, x, 0.18, 3.58, n)
+        chain(b, x, 0.12, 3.58, n)
     if slack:  # slack loop: a short strand hooked across
         for i, x in enumerate((-0.14, -0.07, 0.0, 0.07, 0.14)):
-            diamond_link(b, (x, 0.12, 1.25 - abs(x) * 1.2), i % 2 == 0, half_len=0.05, half_w=0.03, r=0.016)
+            diamond_link(b, (x, 0.1, 1.6 - abs(x) * 1.2), i % 2 == 0, half_len=0.07, half_w=0.045, r=0.024)
     return b
 
 
@@ -435,7 +441,7 @@ def floor_tile(name, region):
 def prop_hook():
     """Hoist hook on three links. Origin = the hanging point (top of the chain)."""
     b = Builder()
-    chain(b, 0, 0, 0, 3, pitch=0.15)
+    chain(b, 0, 0, 0, 3, pitch=0.15, half_len=0.085, half_w=0.05, r=0.02)
     top = -0.45
     path = [(0, 0, top), (0, 0, top - 0.35)]
     cx, cz, r = 0.2, top - 0.35, 0.2
@@ -539,7 +545,7 @@ def mod_collapse():
 MODULES = {
     "brick_a": wall_brick_a, "brick_b": wall_brick_b, "rib": wall_iron_rib,
     "chain": wall_chain,
-    "chain_heavy": lambda: wall_chain(((-0.2, 8), (0.2, 10)), slack=True),
+    "chain_heavy": lambda: wall_chain(((-0.2, 6), (0.2, 7)), slack=True),
     "mould": wall_mould, "trough": wall_trough, "pillar": corner_pillar,
     "buttress": mod_buttress, "collapse": mod_collapse,
 }
@@ -574,21 +580,55 @@ SEGMENTS = {
 }
 
 
+REC = 0.16           # brick panels sit this far behind the collision line; iron posts stand on it
+POST_HW = 0.14       # post half width
+PIERS = {"pillar", "buttress"}               # full-depth modules: stay on the line, no post beside them
+NO_POST = PIERS | {"collapse"}
+
+
+def post(b, x, half=None):
+    """Riveted iron post at a cell boundary x, front on the collision line, with a big cap block on top.
+    half: None = full post, -1 / +1 = only the half toward -x / +x (segment ends; two halves make one post)."""
+    x0 = x - POST_HW if half != 1 else x
+    x1 = x + POST_HW if half != -1 else x
+    skip_x = ("+x",) if half == -1 else ("-x",) if half == 1 else ()
+    top = COPE_Z1 + 0.25
+    post_face(b, x0, x1, 0.0, 0.0, COPE_Z0)
+    b.box((x0, 0.0, 0.0), (x1, REC + 0.04, COPE_Z0), "iron", skip=("-y", "+y", "-z", "+z") + skip_x)
+    cx0 = x - 0.3 if half != 1 else x
+    cx1 = x + 0.3 if half != -1 else x
+    b.box((cx0, -0.2, COPE_Z0 - 0.1), (cx1, D + REC + 0.2, top), "stone", skip=("+y", "-z") + skip_x)
+
+
 def segment(name, mods):
     b = Builder()
+    keys = [m if isinstance(m, str) else m[0] for m in mods]
     for i, m in enumerate(mods):
         key, prop = (m, None) if isinstance(m, str) else m
         mb = MODULES[key]()
         if prop:
             fn, mat = PROP_MOUNTS[prop]
             merge_into(mb, fn(), mat())
-        merge_into(b, mb, Matrix.Translation(((i - (SEG_CELLS - 1) / 2) * CELL, 0, 0)))
+        rec = 0.0 if key in PIERS else REC
+        merge_into(b, mb, Matrix.Translation(((i - (SEG_CELLS - 1) / 2) * CELL, rec, 0)))
+    # iron posts on cell boundaries (half posts at both ends, so every segment joint gets one full post)
+    xs = [(j - SEG_CELLS / 2) * CELL for j in range(SEG_CELLS + 1)]
+    for j, x in enumerate(xs):
+        if j == 0:
+            post(b, x, half=1)
+        elif j == SEG_CELLS:
+            post(b, x, half=-1)
+        elif keys[j - 1] not in NO_POST and keys[j] not in NO_POST:
+            post(b, x)
     return b.to_object(name)
 
 
+SLAB_H, SLAB_BEV = 0.035, 0.07    # floor slab: raised top, chamfered edge (reads as the concept's chunky flagstones)
+
+
 def floor_strip(cols, variant):
-    """One recycling group of floor: SEG_CELLS rows x cols cells, origin at the group centre, floor level.
-    Seamless along the corridor: every cell edge is the same wide joint."""
+    """One recycling group of floor: SEG_CELLS rows x cols bevelled slabs, origin at the group centre, floor
+    level. Seamless along the corridor: every slab is the same, chamfered down to z = 0 at the cell edge."""
     b = Builder()
     rnd = random.Random(cols * 31 + variant)
     p_b = 0.1 if variant == 0 else 0.3
@@ -596,7 +636,15 @@ def floor_strip(cols, variant):
         for j in range(SEG_CELLS):
             cx, cy = (i - (cols - 1) / 2) * CELL, (j - (SEG_CELLS - 1) / 2) * CELL
             reg = "floor_b" if rnd.random() < p_b else "floor_a"
-            b.face([(cx - HALF, cy - HALF, 0), (cx + HALF, cy - HALF, 0), (cx + HALF, cy + HALF, 0), (cx - HALF, cy + HALF, 0)], reg, (0, 0, 1))
+            h = SLAB_H + rnd.uniform(-0.012, 0.012)
+            o, t = HALF, HALF - SLAB_BEV
+            lo = [(cx - o, cy - o, 0), (cx + o, cy - o, 0), (cx + o, cy + o, 0), (cx - o, cy + o, 0)]
+            hi = [(cx - t, cy - t, h), (cx + t, cy - t, h), (cx + t, cy + t, h), (cx - t, cy + t, h)]
+            b.face(hi, reg, (0, 0, 1))
+            for e in range(4):
+                a, c = e, (e + 1) % 4
+                mid = ((lo[a][0] + lo[c][0]) / 2 - cx, (lo[a][1] + lo[c][1]) / 2 - cy, 0.5)
+                b.face([lo[a], lo[c], hi[c], hi[a]], "sw_stone_dk", mid)
     return b.to_object(f"T1_FloorStrip_W{cols}_{'AB'[variant]}")
 
 

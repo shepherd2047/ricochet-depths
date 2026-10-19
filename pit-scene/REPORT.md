@@ -43,6 +43,16 @@ Clean room: I read only `ballpit-spec/style.md`, `ballpit-spec/spec.md` §0–1,
 5. **The gate is mostly framed out at 13×15.** The camera fits the board, so only the lintel and its chains show at the top of the frame, and the towers stand behind the wall line. If analysis wants the full gate on screen at the boss turn, the camera would have to pull back or tilt up for the boss intro. That is a camera call, not a kit change.
 6. **Props never sit on the board.** In the concept image they stand in the play area. In the kit they hang on walls, sit in niches, or lie on the floor beyond the 15-row board.
 
+7. **Wall detail pass (user review: the walls showed no detail and were far from the concept):**
+   - Recessed brick panels between riveted iron posts, with big cap blocks.
+   - Chain links about 1.6× bigger.
+   - Bevelled floor slabs, one per cell.
+   - Two cool wall-fill lights with no shadows (LIGHTING.md).
+   - Still unlike the concept:
+     - The board-fit camera shows the walls nearly edge-on.
+     - The concept's floor props stand in play cells.
+     - The concept is brighter than the art bible's scenery values.
+
 ## Proposals for art-bible.md (not applied)
 - §3 Theme 1 local light: add "optional cool fill (#5A6B78, point light, low intensity, near end, no shadows), so the wall opposite the furnace reads". This is the only way I see to light both walls without a board shadow.
 - §3 wall kit list: replace the per-cell wall list with "three 4-cell segment sets (start / mid / end) for the scrolling corridor, plus an end-of-corridor gate". The pillar is now a pier inside segments, not a run-end cap.

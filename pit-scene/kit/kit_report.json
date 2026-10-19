@@ -1,12 +1,12 @@
 {
   "T1_Start_A": {
     "kind": "segment:start",
-    "unity_verts": 1885,
-    "tris": 944,
+    "unity_verts": 1617,
+    "tris": 810,
     "size_xyz_blender": [
       4.5,
-      1.11,
-      4.7
+      1.31,
+      4.95
     ],
     "budget_ok": true,
     "modules": [
@@ -18,11 +18,11 @@
   },
   "T1_Start_B": {
     "kind": "segment:start",
-    "unity_verts": 684,
-    "tris": 346,
+    "unity_verts": 480,
+    "tris": 244,
     "size_xyz_blender": [
       4.5,
-      1.34,
+      1.4,
       5.15
     ],
     "budget_ok": true,
@@ -35,12 +35,12 @@
   },
   "T1_Start_C": {
     "kind": "segment:start",
-    "unity_verts": 1277,
-    "tris": 656,
+    "unity_verts": 1153,
+    "tris": 594,
     "size_xyz_blender": [
       4.5,
-      1.11,
-      4.7
+      1.31,
+      4.95
     ],
     "budget_ok": true,
     "modules": [
@@ -52,11 +52,11 @@
   },
   "T1_Mid_A": {
     "kind": "segment:mid",
-    "unity_verts": 679,
-    "tris": 344,
+    "unity_verts": 783,
+    "tris": 396,
     "size_xyz_blender": [
       4.5,
-      1.34,
+      1.4,
       5.15
     ],
     "budget_ok": true,
@@ -69,12 +69,12 @@
   },
   "T1_Mid_B": {
     "kind": "segment:mid",
-    "unity_verts": 633,
-    "tris": 334,
+    "unity_verts": 817,
+    "tris": 426,
     "size_xyz_blender": [
       4.5,
-      0.97,
-      4.86
+      1.31,
+      4.95
     ],
     "budget_ok": true,
     "modules": [
@@ -86,11 +86,11 @@
   },
   "T1_Mid_C": {
     "kind": "segment:mid",
-    "unity_verts": 1371,
-    "tris": 690,
+    "unity_verts": 1331,
+    "tris": 670,
     "size_xyz_blender": [
       4.5,
-      1.34,
+      1.4,
       5.15
     ],
     "budget_ok": true,
@@ -103,11 +103,11 @@
   },
   "T1_End_A": {
     "kind": "segment:end",
-    "unity_verts": 723,
-    "tris": 362,
+    "unity_verts": 827,
+    "tris": 414,
     "size_xyz_blender": [
       4.5,
-      1.72,
+      1.8,
       5.75
     ],
     "budget_ok": true,
@@ -120,11 +120,11 @@
   },
   "T1_End_B": {
     "kind": "segment:end",
-    "unity_verts": 611,
-    "tris": 306,
+    "unity_verts": 675,
+    "tris": 338,
     "size_xyz_blender": [
       4.5,
-      1.72,
+      1.8,
       5.75
     ],
     "budget_ok": true,
@@ -137,11 +137,11 @@
   },
   "T1_End_C": {
     "kind": "segment:end",
-    "unity_verts": 1499,
-    "tris": 750,
+    "unity_verts": 1363,
+    "tris": 682,
     "size_xyz_blender": [
       4.5,
-      1.72,
+      1.8,
       5.75
     ],
     "budget_ok": true,
@@ -154,96 +154,96 @@
   },
   "T1_FloorStrip_W7_A": {
     "kind": "floor",
-    "unity_verts": 112,
-    "tris": 56,
+    "unity_verts": 560,
+    "tris": 280,
     "size_xyz_blender": [
       7.875,
       4.5,
-      0.0
+      0.044
     ],
     "budget_ok": true,
     "modules": null
   },
   "T1_FloorStrip_W7_B": {
     "kind": "floor",
-    "unity_verts": 112,
-    "tris": 56,
+    "unity_verts": 560,
+    "tris": 280,
     "size_xyz_blender": [
       7.875,
       4.5,
-      0.0
+      0.045
     ],
     "budget_ok": true,
     "modules": null
   },
   "T1_FloorStrip_W9_A": {
     "kind": "floor",
-    "unity_verts": 144,
-    "tris": 72,
+    "unity_verts": 720,
+    "tris": 360,
     "size_xyz_blender": [
       10.125,
       4.5,
-      0.0
+      0.047
     ],
     "budget_ok": true,
     "modules": null
   },
   "T1_FloorStrip_W9_B": {
     "kind": "floor",
-    "unity_verts": 144,
-    "tris": 72,
+    "unity_verts": 720,
+    "tris": 360,
     "size_xyz_blender": [
       10.125,
       4.5,
-      0.0
+      0.046
     ],
     "budget_ok": true,
     "modules": null
   },
   "T1_FloorStrip_W11_A": {
     "kind": "floor",
-    "unity_verts": 176,
-    "tris": 88,
+    "unity_verts": 880,
+    "tris": 440,
     "size_xyz_blender": [
       12.375,
       4.5,
-      0.0
+      0.047
     ],
     "budget_ok": true,
     "modules": null
   },
   "T1_FloorStrip_W11_B": {
     "kind": "floor",
-    "unity_verts": 176,
-    "tris": 88,
+    "unity_verts": 880,
+    "tris": 440,
     "size_xyz_blender": [
       12.375,
       4.5,
-      0.0
+      0.047
     ],
     "budget_ok": true,
     "modules": null
   },
   "T1_FloorStrip_W13_A": {
     "kind": "floor",
-    "unity_verts": 208,
-    "tris": 104,
+    "unity_verts": 1040,
+    "tris": 520,
     "size_xyz_blender": [
       14.625,
       4.5,
-      0.0
+      0.047
     ],
     "budget_ok": true,
     "modules": null
   },
   "T1_FloorStrip_W13_B": {
     "kind": "floor",
-    "unity_verts": 208,
-    "tris": 104,
+    "unity_verts": 1040,
+    "tris": 520,
     "size_xyz_blender": [
       14.625,
       4.5,
-      0.0
+      0.047
     ],
     "budget_ok": true,
     "modules": null
@@ -255,7 +255,7 @@
     "size_xyz_blender": [
       0.484,
       0.12,
-      1.04
+      0.995
     ],
     "budget_ok": true,
     "modules": null

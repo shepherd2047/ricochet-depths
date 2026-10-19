@@ -11,7 +11,8 @@ Layout (pixels, origin top-left; Blender/Unity UV v = 1 - y/1024). Keep in sync 
   iron      x 768-1023 y    0-255    cast iron plate
   clay      x 768-1023 y  256-511    fired mould clay
   bronze    x 768-1023 y  512-767    bell bronze with patina
-  swatches  x 768-1023 y  768-1023   8x8 grid of 32 px flat colours (see SWATCHES)
+  swatches  x 768-1023 y  768-831    2 rows of 32 px flat colours (see SWATCHES)
+  pilaster  x 768-831  y  832-1023   riveted iron post strip (0.28 x 1.1 units, stacked 4x up a post)
 
 All values sit inside style.md section 4 scenery range (V 10-33 %, mostly 10-20 %; S 15-45 %),
 hue from art-bible.md theme 1 (slate-teal H195); props use a dim copper/bronze near the top of the range.
@@ -130,7 +131,7 @@ def stone_blocks(w, h, bw, bh):
 
 def flagstone(sz, cracked=False):
     out = np.zeros((sz, sz, 3), np.float32)
-    # 2x2 slabs per cell with a wide joint, slight per-slab tone shift
+    # one slab per cell (the slab bevel is modelled), slight tone shift across the slab
     half = sz // 2
     for i in range(2):
         for j in range(2):
@@ -140,8 +141,6 @@ def flagstone(sz, cracked=False):
     j = 5
     out[:j] = out[-j:] = R0
     out[:, :j] = out[:, -j:] = R0
-    out[half - 1:half + 1] = R0 * 0.9 + R1 * 0.1
-    out[:, half - 1:half + 1] = R0 * 0.9 + R1 * 0.1
     if cracked:
         x, y = rng.integers(20, sz - 20), 0
         while y < sz:
@@ -186,6 +185,26 @@ for i, (_, col) in enumerate(SWATCHES):
     img[y:y + 32, x:x + 32] = col
 # rest of the swatch grid: deep tone
 img[832:1024, 768:1024] = R0
+
+
+def pilaster(w, h):
+    """Riveted cast-iron post face: lit edge strips, a seam, two rivet columns with a top-left highlight."""
+    out = np.zeros((h, w, 3), np.float32) + IRON
+    out += noise(h, w, 8, 1.2)
+    out[:, :5] = IRON_HI
+    out[:, -5:] *= 0.7
+    out[:4] = IRON_HI * 0.9
+    out[-4:] *= 0.7
+    hi = hexrgb("#3E4D52")   # V32: brightest rivet tip, still inside the scenery range
+    for y in range(24, h, 48):
+        for x in (18, w - 18):
+            out[y - 6:y + 6, x - 6:x + 6] = IRON_HI
+            out[y - 6:y - 2, x - 6:x - 2] = hi
+            out[y + 3:y + 7, x - 5:x + 7] *= 0.55
+    return out
+
+
+img[832:1024, 768:832] = pilaster(64, 192)
 
 img = np.clip(img, 0, 255).astype(np.uint8)
 

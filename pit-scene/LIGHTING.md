@@ -43,9 +43,16 @@ Intensity multiplier 1. No skybox and no reflection probe: set Environment Refle
 | Rotation | Euler **(10, 0, 0)** in Unity world: it shines almost straight into the screen, tipped 10° downward (toward the player end) |
 | Shadows | Soft. Strength 0.8, distance **40**: style.md says 30, but at 13×15 the camera is 26 away. Main light only. |
 
-Inner wall faces lie parallel to this light, so they get almost no direct light (they show ambient and the copper spot). This is intended: walls stay darker than the board.
+Inner wall faces lie parallel to this light, so they get almost no direct light from it. The wall fill below lights them, so the walls still stay a little darker than the board.
 
 A yaw of 10–20° would light one wall, but that wall then throws a shadow about 1 cell wide onto the board. Don't add a yaw.
+
+## Wall fill (two lights, added 2026-10-19 after review: wall faces read too dark)
+| Setting | Value |
+|---|---|
+| Type | 2 × Directional, colour **#96ACBE**, intensity **0.8** each, **no shadows** (URP additional lights, per-pixel) |
+| Direction | One per wall. Each travels across the corridor into the wall it lights, about 80° from straight down. It is tipped 30° toward the far end, so the post sides facing the player get light too. Pit frame (Blender) Euler XYZ (30°, ±80°, 0): +80 lights the left wall, −80 the right. |
+| Why | The key runs parallel to the walls, so without these the wall faces get ambient only and the bricks, posts and chains don't read. The fills add little to the floor, because they hit it nearly edge-on. |
 
 ## Theme light: furnace mouth (copper spot)
 | Setting | Value |

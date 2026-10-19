@@ -20,16 +20,16 @@ Lighting, fog and camera values are in [LIGHTING.md](LIGHTING.md). The camera is
 
 | Piece | Set | Built from (cell 1 → 4, near → far on the left wall) | Unity verts* | Tris | L × D × H |
 |---|---|---|---|---|---|
-| `T1_Start_A` | start | brick A · iron rib + hook · chain alcove · brick A | 1885 | 944 | 4.5 × 1.11 × 4.70 |
-| `T1_Start_B` | start | brick A · pier · iron rib · brick A | 684 | 346 | 4.5 × 1.34 × 5.15 |
-| `T1_Start_C` | start | brick A · trough + ladle · iron rib + hook · brick A | 1277 | 656 | 4.5 × 1.11 × 4.70 |
-| `T1_Mid_A` | mid | brick B · bell-mould alcove · pier · brick A | 679 | 344 | 4.5 × 1.34 × 5.15 |
-| `T1_Mid_B` | mid | brick A · trough + ladle · brick B · brick B | 633 | 334 | 4.5 × 0.97 × 4.86 |
-| `T1_Mid_C` | mid | brick B · chain alcove · pier · brick B | 1371 | 690 | 4.5 × 1.34 × 5.15 |
-| `T1_End_A` | end | brick B · buttress · bell-mould alcove · brick B | 723 | 362 | 4.5 × 1.72 × 5.75 |
-| `T1_End_B` | end | brick B · collapsed breach + bell shard · buttress · brick B | 611 | 306 | 4.5 × 1.72 × 5.75 |
-| `T1_End_C` | end | brick B · heavy slack chains · buttress · brick B | 1499 | 750 | 4.5 × 1.72 × 5.75 |
-| `T1_FloorStrip_W7/W9/W11/W13_A/_B` | all | 4 rows × cols floor cells (B is more cracked) | 112 / 144 / 176 / 208 | half of verts | cols × 1.125 × 4.5 |
+| `T1_Start_A` | start | brick A · iron rib + hook · chain alcove · brick A | 1617 | 810 | 4.5 × 1.31 × 4.95 |
+| `T1_Start_B` | start | brick A · pier · iron rib · brick A | 480 | 244 | 4.5 × 1.40 × 5.15 |
+| `T1_Start_C` | start | brick A · trough + ladle · iron rib + hook · brick A | 1153 | 594 | 4.5 × 1.31 × 4.95 |
+| `T1_Mid_A` | mid | brick B · bell-mould alcove · pier · brick A | 783 | 396 | 4.5 × 1.40 × 5.15 |
+| `T1_Mid_B` | mid | brick A · trough + ladle · brick B · brick B | 817 | 426 | 4.5 × 1.31 × 4.95 |
+| `T1_Mid_C` | mid | brick B · chain alcove · pier · brick B | 1331 | 670 | 4.5 × 1.40 × 5.15 |
+| `T1_End_A` | end | brick B · buttress · bell-mould alcove · brick B | 827 | 414 | 4.5 × 1.80 × 5.75 |
+| `T1_End_B` | end | brick B · collapsed breach + bell shard · buttress · brick B | 675 | 338 | 4.5 × 1.80 × 5.75 |
+| `T1_End_C` | end | brick B · heavy slack chains · buttress · brick B | 1363 | 682 | 4.5 × 1.80 × 5.75 |
+| `T1_FloorStrip_W7/W9/W11/W13_A/_B` | all | 4 rows × cols bevelled floor slabs, one per cell (B is more cracked) | 560 / 720 / 880 / 1040 | half of verts | cols × 1.125 × 4.5 |
 | `T1_Gate_Tower` | gate | gate tower (use 2, one per side) | 166 | 84 | 2.7 × 3.25 × 9.8 |
 | `T1_Gate_Lintel` | gate | lintel: stone blocks, keystone, chain links, iron yoke | 1092 | 546 | 17.0 × 2.02 × 4.59 |
 | `T1_Prop_Hook`, `_BellShard`, `_Ladle` | spare | loose props, already baked into the segments above | 320 / 192 / 270 | | |
@@ -41,6 +41,11 @@ Lighting, fog and camera values are in [LIGHTING.md](LIGHTING.md). The camera is
   - The brick texture restarts on every cell.
   - So **any segment joins any other** along the corridor, including across sets.
   - The bulky features (pier, buttress, breach) always sit in cells 2–3.
+- **Wall relief (reads from the 30° camera):**
+  - The brick panels sit 0.16 behind the collision line.
+  - Riveted iron posts stand on the line at the cell boundaries, each with a big stone cap block that overhangs the wall top. Every segment ends in a half post, so each joint makes one full post. There is no post next to a pier, buttress or collapse.
+  - Piers and buttresses stay on the line.
+  - Nothing is in front of the line below a height of 1.5. The cap blocks project 0.2 at the top.
 - **End-set feel:** the end set is deeper and taller (1.72 deep, 5.75 tall), with damaged brick, buttresses and heavy chains. The corridor visibly closes in near the boss.
 - Per-piece files contain no textures. `kit/T1_Kit_All_preview.glb` holds every piece with the atlas embedded, for viewing only. Don't ship it.
 

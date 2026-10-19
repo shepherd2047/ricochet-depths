@@ -38,6 +38,9 @@ FOG_RGB = (38, 41, 55)
 AMB_SKY, AMB_EQ, AMB_GROUND = (54, 58, 66), (29, 32, 34), (12, 11, 9)
 COPPER = (217, 136, 65)
 KEY_YAW = 0.0    # deg; style.md key (10 deg off the view axis, no yaw). A yaw >0 lights the left wall face but casts a wall shadow onto the board - keep 0 for readability
+WALL_FILL_RGB = (150, 172, 190)   # cool grey-blue
+WALL_FILL_INT = 0.8               # Unity intensity, each
+WALL_FILL_TILT = 80               # deg from straight down toward the lit wall (L light rakes the left wall)
 FOG_START_OFF, FOG_END_OFF = 2.0, 14.0   # fog start/end = camera-to-board distance + these
 
 
@@ -228,6 +231,16 @@ def lights(cols, rows):
     so = bpy.data.objects.new("Key", sun)
     so.rotation_euler = Euler((math.radians(-10), math.radians(KEY_YAW), 0), "YXZ")
     bpy.context.scene.collection.objects.link(so)
+    # wall fill: two weak cool directionals, no shadows, one raking across each wall's inner face. The key runs
+    # parallel to the walls, so without these the wall faces only get ambient (Unity: 2 additional lights)
+    for side, ry in (("L", WALL_FILL_TILT), ("R", -WALL_FILL_TILT)):
+        fl = bpy.data.lights.new("WallFill" + side, "SUN")
+        fl.color = lin(WALL_FILL_RGB)[:3]
+        fl.energy = math.pi * WALL_FILL_INT
+        fl.use_shadow = False
+        fo = bpy.data.objects.new("WallFill" + side, fl)
+        fo.rotation_euler = Euler((math.radians(30), math.radians(ry), 0), "XYZ")   # +X tip: travels toward the far end, so it also lights the post sides that face the player
+        bpy.context.scene.collection.objects.link(fo)
     # theme 1 local light: copper spot from an off-screen furnace mouth, top-left (far end, left wall, high)
     sp = bpy.data.lights.new("FurnaceSpot", "SPOT")
     sp.color = lin(COPPER)[:3]
