@@ -41,6 +41,7 @@ KEY_YAW = 0.0    # deg; style.md key (10 deg off the view axis, no yaw). A yaw >
 WALL_FILL_RGB = (150, 172, 190)   # cool grey-blue
 WALL_FILL_INT = 0.8               # Unity intensity, each
 WALL_FILL_TILT = 80               # deg from straight down toward the lit wall (L light rakes the left wall)
+FIT_MARGIN = 0.5                  # cells of wall shown beside the near row's outer columns (--margin)
 FOG_START_OFF, FOG_END_OFF = 2.0, 14.0   # fog start/end = camera-to-board distance + these
 
 
@@ -63,6 +64,7 @@ def args():
     ap.add_argument("--seed", type=int, default=12345)
     ap.add_argument("--tilt", type=float, default=30.0)
     ap.add_argument("--fov", type=float, default=65.0)
+    ap.add_argument("--margin", type=float, default=0.5)
     ap.add_argument("--balls", action="store_true")
     ap.add_argument("--kitsheet", action="store_true")
     ap.add_argument("--out", required=True)
@@ -272,7 +274,7 @@ def fit_camera(cols, rows, tilt_deg, fov_deg, aspect=9 / 16):
         z = ry * st - rz * ct
         return px / (z * tx), (ry * ct + rz * st) / (z * ty_)
 
-    half_x, half_y = (cols / 2 + 0.5) * CELL, rows / 2 * CELL
+    half_x, half_y = (cols / 2 + FIT_MARGIN) * CELL, rows / 2 * CELL
     best = None
     for i in range(-400, 401):
         ty = i / 100
@@ -357,6 +359,8 @@ def kitsheet(out, res):
 
 def main():
     a = args()
+    global FIT_MARGIN
+    FIT_MARGIN = a.margin
     if a.kitsheet:
         kitsheet(a.out, a.res)
         return
