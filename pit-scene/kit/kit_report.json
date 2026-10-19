@@ -18,17 +18,17 @@
   },
   "T1_Start_B": {
     "kind": "segment:start",
-    "unity_verts": 480,
-    "tris": 244,
+    "unity_verts": 456,
+    "tris": 233,
     "size_xyz_blender": [
       4.5,
-      1.4,
-      5.15
+      2.23,
+      6.32
     ],
     "budget_ok": true,
     "modules": [
       "brick_a",
-      "pillar",
+      "window",
       "rib",
       "brick_a"
     ]
@@ -52,18 +52,18 @@
   },
   "T1_Mid_A": {
     "kind": "segment:mid",
-    "unity_verts": 783,
-    "tris": 396,
+    "unity_verts": 759,
+    "tris": 385,
     "size_xyz_blender": [
       4.5,
-      1.4,
-      5.15
+      2.23,
+      6.32
     ],
     "budget_ok": true,
     "modules": [
       "brick_b",
       "mould",
-      "pillar",
+      "window",
       "brick_a"
     ]
   },
@@ -103,17 +103,17 @@
   },
   "T1_End_A": {
     "kind": "segment:end",
-    "unity_verts": 827,
-    "tris": 414,
+    "unity_verts": 819,
+    "tris": 415,
     "size_xyz_blender": [
       4.5,
-      1.8,
-      5.75
+      2.23,
+      6.32
     ],
     "budget_ok": true,
     "modules": [
       "brick_b",
-      "buttress",
+      "window",
       "mould",
       "brick_b"
     ]
@@ -152,26 +152,110 @@
       "brick_b"
     ]
   },
-  "T1_FloorStrip_W7_A": {
-    "kind": "floor",
-    "unity_verts": 560,
-    "tris": 280,
+  "T1_Lane_Start_A": {
+    "kind": "lane:start",
+    "unity_verts": 346,
+    "tris": 188,
     "size_xyz_blender": [
-      7.875,
       4.5,
-      0.044
+      1.278,
+      1.619
     ],
     "budget_ok": true,
     "modules": null
   },
-  "T1_FloorStrip_W7_B": {
-    "kind": "floor",
-    "unity_verts": 560,
-    "tris": 280,
+  "T1_Lane_Start_B": {
+    "kind": "lane:start",
+    "unity_verts": 140,
+    "tris": 70,
     "size_xyz_blender": [
-      7.875,
       4.5,
-      0.045
+      0.905,
+      0.44
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_Lane_Start_C": {
+    "kind": "lane:start",
+    "unity_verts": 690,
+    "tris": 360,
+    "size_xyz_blender": [
+      4.5,
+      1.083,
+      1.559
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_Lane_Mid_A": {
+    "kind": "lane:mid",
+    "unity_verts": 860,
+    "tris": 430,
+    "size_xyz_blender": [
+      4.5,
+      1.083,
+      1.382
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_Lane_Mid_B": {
+    "kind": "lane:mid",
+    "unity_verts": 544,
+    "tris": 272,
+    "size_xyz_blender": [
+      4.5,
+      1.02,
+      0.952
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_Lane_Mid_C": {
+    "kind": "lane:mid",
+    "unity_verts": 670,
+    "tris": 350,
+    "size_xyz_blender": [
+      4.5,
+      1.278,
+      1.652
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_Lane_End_A": {
+    "kind": "lane:end",
+    "unity_verts": 972,
+    "tris": 486,
+    "size_xyz_blender": [
+      4.5,
+      1.012,
+      0.999
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_Lane_End_B": {
+    "kind": "lane:end",
+    "unity_verts": 540,
+    "tris": 270,
+    "size_xyz_blender": [
+      4.5,
+      1.07,
+      0.495
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_Lane_End_C": {
+    "kind": "lane:end",
+    "unity_verts": 688,
+    "tris": 344,
+    "size_xyz_blender": [
+      4.5,
+      1.0,
+      0.228
     ],
     "budget_ok": true,
     "modules": null
@@ -183,7 +267,7 @@
     "size_xyz_blender": [
       10.125,
       4.5,
-      0.047
+      0.042
     ],
     "budget_ok": true,
     "modules": null
@@ -195,7 +279,7 @@
     "size_xyz_blender": [
       10.125,
       4.5,
-      0.046
+      0.041
     ],
     "budget_ok": true,
     "modules": null
@@ -207,7 +291,7 @@
     "size_xyz_blender": [
       12.375,
       4.5,
-      0.047
+      0.042
     ],
     "budget_ok": true,
     "modules": null
@@ -219,7 +303,7 @@
     "size_xyz_blender": [
       12.375,
       4.5,
-      0.047
+      0.042
     ],
     "budget_ok": true,
     "modules": null
@@ -231,7 +315,7 @@
     "size_xyz_blender": [
       14.625,
       4.5,
-      0.047
+      0.042
     ],
     "budget_ok": true,
     "modules": null
@@ -243,7 +327,31 @@
     "size_xyz_blender": [
       14.625,
       4.5,
-      0.047
+      0.042
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_FloorStrip_W15_A": {
+    "kind": "floor",
+    "unity_verts": 1200,
+    "tris": 600,
+    "size_xyz_blender": [
+      16.875,
+      4.5,
+      0.041
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_FloorStrip_W15_B": {
+    "kind": "floor",
+    "unity_verts": 1200,
+    "tris": 600,
+    "size_xyz_blender": [
+      16.875,
+      4.5,
+      0.042
     ],
     "budget_ok": true,
     "modules": null

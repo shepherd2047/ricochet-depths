@@ -13,6 +13,8 @@ Layout (pixels, origin top-left; Blender/Unity UV v = 1 - y/1024). Keep in sync 
   bronze    x 768-1023 y  512-767    bell bronze with patina
   swatches  x 768-1023 y  768-831    2 rows of 32 px flat colours (see SWATCHES)
   pilaster  x 768-831  y  832-1023   riveted iron post strip (0.28 x 1.1 units, stacked 4x up a post)
+  glow      x 832-863  y  832-863    warm window pane (albedo; the same square is lit in T1_Scenery_Emit.png)
+  floor_c   x 864-1023 y  864-1023   floor cell, lighter tone (chessboard alternation with floor_a)
 
 All values sit inside style.md section 4 scenery range (V 10-33 %, mostly 10-20 %; S 15-45 %),
 hue from art-bible.md theme 1 (slate-teal H195); props use a dim copper/bronze near the top of the range.
@@ -70,7 +72,7 @@ def bricks(w, h, bw, bh, cracked=False):
         for c in range(-1, w // bw + 1):
             x0 = c * bw + off
             t = rng.random()
-            col = R1 + (R2 - R1) * (0.15 + 0.6 * t)
+            col = R1 + (R2 - R1) * (0.4 + 0.6 * t)
             if rng.random() < 0.12:
                 col = R3 * 0.85
             if cracked and rng.random() < 0.18:
@@ -93,7 +95,7 @@ def bricks(w, h, bw, bh, cracked=False):
         out[y0 + 3:y0 + 5] = np.where(out[y0 + 3:y0 + 5] > MORTAR + 1, out[y0 + 3:y0 + 5] * 1.18, out[y0 + 3:y0 + 5])
         out[y0 + bh - 3:y0 + bh] *= 0.82
     # soot gradient: darker toward the floor (v bottom of region = floor level)
-    grad = np.linspace(1.0, 0.72, h, dtype=np.float32)[:, None, None]
+    grad = np.linspace(1.0, 0.8, h, dtype=np.float32)[:, None, None]
     out *= grad
     if cracked:
         for _ in range(5):  # a few dark crack polylines
@@ -129,18 +131,18 @@ def stone_blocks(w, h, bw, bh):
     return out
 
 
-def flagstone(sz, cracked=False):
+def flagstone(sz, cracked=False, tone=0.0):
     out = np.zeros((sz, sz, 3), np.float32)
     # one slab per cell (the slab bevel is modelled), slight tone shift across the slab
     half = sz // 2
     for i in range(2):
         for j in range(2):
-            col = R0 + (R1 - R0) * (0.78 + 0.12 * rng.random()) + rng.normal(0, 0.8)
+            col = R1 + (R2 - R1) * (0.3 + tone + 0.1 * rng.random()) + rng.normal(0, 0.8)
             out[i * half:(i + 1) * half, j * half:(j + 1) * half] = col
     out += noise(sz, sz, 16, 1.8)
-    j = 5
-    out[:j] = out[-j:] = R0
-    out[:, :j] = out[:, -j:] = R0
+    j = max(3, sz // 50)            # thin black seam on every cell edge (the modelled bevel adds the relief)
+    out[:j] = out[-j:] = MORTAR * 0.7
+    out[:, :j] = out[:, -j:] = MORTAR * 0.7
     if cracked:
         x, y = rng.integers(20, sz - 20), 0
         while y < sz:
@@ -205,14 +207,21 @@ def pilaster(w, h):
 
 
 img[832:1024, 768:832] = pilaster(64, 192)
+GLOW = hexrgb("#E8A456")
+img[832:864, 832:864] = GLOW
+img[864:1024, 864:1024] = flagstone(160, tone=0.25)
 
 img = np.clip(img, 0, 255).astype(np.uint8)
 
 if __name__ == "__main__":
     out = sys.argv[1] if len(sys.argv) > 1 else "textures/T1_Scenery_Atlas.png"
     Image.fromarray(img).save(out)
+    emit = np.zeros((S, S, 3), np.uint8)       # emission mask: black except the window-pane square
+    emit[832:864, 832:864] = GLOW.astype(np.uint8)
+    Image.fromarray(emit).save(out.replace("_Atlas.png", "_Emit.png"))
     # report value/saturation stats against style.md section 4
-    hsv = np.array([colorsys.rgb_to_hsv(*(p / 255.0)) for p in img.reshape(-1, 3)[::97]])
+    st = img.copy(); st[832:864, 832:864] = R1
+    hsv = np.array([colorsys.rgb_to_hsv(*(p / 255.0)) for p in st.reshape(-1, 3)[::97]])
     v, s = hsv[:, 2] * 100, hsv[:, 1] * 100
     print(f"wrote {out}  V p5/p50/p95 = {np.percentile(v, 5):.0f}/{np.percentile(v, 50):.0f}/{np.percentile(v, 95):.0f}%"
           f"  S p50/p95 = {np.percentile(s, 50):.0f}/{np.percentile(s, 95):.0f}%")

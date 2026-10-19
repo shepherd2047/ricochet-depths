@@ -28,6 +28,8 @@ SETS = {
     "mid": ["T1_Mid_A", "T1_Mid_B", "T1_Mid_C"],
     "end": ["T1_End_A", "T1_End_B", "T1_End_C"],
 }
+LANES = {k: [f"T1_Lane_{k.capitalize()}_{c}" for c in "ABC"] for k in ("start", "mid", "end")}
+LANE_W = CELL                     # prop lane between the board edge (kerb) and the wall face; not part of the board
 SET_EDGES = (0.3, 0.7)            # progress < 0.3 start, < 0.7 mid, else end
 SET_BLEND = 0.05                  # +/- jitter on progress per group so set changes are not a hard line
 GATE_K_AFTER_BOARD = 3            # gate front stops this many cells beyond the board's far row
@@ -41,7 +43,7 @@ KEY_YAW = 0.0    # deg; style.md key (10 deg off the view axis, no yaw). A yaw >
 WALL_FILL_RGB = (150, 172, 190)   # cool grey-blue
 WALL_FILL_INT = 0.8               # Unity intensity, each
 WALL_FILL_TILT = 80               # deg from straight down toward the lit wall (L light rakes the left wall)
-FIT_MARGIN = 0.5                  # cells of wall shown beside the near row's outer columns (--margin)
+FIT_MARGIN = 1.5                  # cells of wall shown beside the near row's outer columns (--margin)
 FOG_START_OFF, FOG_END_OFF = 2.0, 14.0   # fog start/end = camera-to-board distance + these
 
 
@@ -64,7 +66,7 @@ def args():
     ap.add_argument("--seed", type=int, default=12345)
     ap.add_argument("--tilt", type=float, default=30.0)
     ap.add_argument("--fov", type=float, default=65.0)
-    ap.add_argument("--margin", type=float, default=0.5)
+    ap.add_argument("--margin", type=float, default=1.5)   # prop lane (1 cell) + half a cell of wall
     ap.add_argument("--balls", action="store_true")
     ap.add_argument("--kitsheet", action="store_true")
     ap.add_argument("--out", required=True)
@@ -126,16 +128,21 @@ def pick_segments(g, p, seed, prev):
 def layout_corridor(cols, rows, turn, final, seed, coll, balls=False):
     k = kit()
     half_w = cols * CELL / 2
+    wall_x = half_w + LANE_W                                      # wall face (segment + lane origin)
     count = {}
     prev = {}
     for g in range(G_MIN, G_MAX + 1):
         y = (g * GROUP + (GROUP - 1) / 2) * CELL                 # group centre
         p = group_progress(g, turn, final, rows)
         segs = pick_segments(g, p, seed, prev)
-        for side, x, rot in (("L", -half_w, 90), ("R", half_w, -90)):   # piece -Y (inner face) -> board centre
+        for side, x, rot in (("L", -wall_x, 90), ("R", wall_x, -90)):   # piece -Y (inner face) -> board centre
             place(k[segs[side]], (x, y, 0), rot, coll)
             count[segs[side]] = count.get(segs[side], 0) + 1
-        fl = f"T1_FloorStrip_W{cols}_{'B' if ghash(seed, g, 7) % 3 == 0 else 'A'}"
+            set_name = segs[side].split("_")[1].lower()
+            ln = LANES[set_name][(ghash(seed, g, ord(side), 99) >> 7) % 3]   # same set as the wall beside it
+            place(k[ln], (x, y, 0), rot, coll)
+            count[ln] = count.get(ln, 0) + 1
+        fl = f"T1_FloorStrip_W{cols + 2}_{'B' if ghash(seed, g, 7) % 3 == 0 else 'A'}"
         place(k[fl], (0, y, 0), 0, coll)
         count[fl] = count.get(fl, 0) + 1
         print("GROUP %+d p=%.2f %s | %s" % (g, p, segs["L"], segs["R"]))
@@ -143,9 +150,9 @@ def layout_corridor(cols, rows, turn, final, seed, coll, balls=False):
     k_gate = rows / 2 + GATE_K_AFTER_BOARD + (final - turn)
     if k_gate <= G_MAX * GROUP + GROUP:
         yg = k_gate * CELL
-        gate = [place(k["T1_Gate_Tower"], (sx * (half_w + TOWER_OFF), yg, 0), 0, coll) for sx in (-1, 1)]
+        gate = [place(k["T1_Gate_Tower"], (sx * (wall_x + TOWER_OFF), yg, 0), 0, coll) for sx in (-1, 1)]
         lt = place(k["T1_Gate_Lintel"], (0, yg, 0), 0, coll)
-        lt.scale.x = (cols * CELL + 2 * TOWER_OFF) / 17.0
+        lt.scale.x = (2 * wall_x + 2 * TOWER_OFF) / 17.0
         for ob in gate + [lt]:
             ob.visible_shadow = False   # Unity: Cast Shadows Off; its shadow band would cross the board
         count["T1_Gate"] = 1
@@ -184,6 +191,18 @@ def add_fog_to_material(cam_dist):
     nt.links.new(bsdf.outputs[0], mix.inputs[1])
     nt.links.new(em.outputs[0], mix.inputs[2])
     nt.links.new(mix.outputs[0], out.inputs["Surface"])
+    bm_ = bpy.data.materials.get("T1_Beam")    # the light shaft fades with the same fog factor
+    if bm_:
+        bt = bm_.node_tree
+        mul = next(n for n in bt.nodes if n.type == "MATH")
+        camd2 = bt.nodes.new("ShaderNodeCameraData")
+        mr2 = bt.nodes.new("ShaderNodeMapRange")
+        mr2.inputs["From Min"].default_value = cam_dist + FOG_START_OFF
+        mr2.inputs["From Max"].default_value = cam_dist + FOG_END_OFF
+        mr2.inputs["To Min"].default_value, mr2.inputs["To Max"].default_value = 1.2, 0.0
+        mr2.clamp = True
+        bt.links.new(camd2.outputs["View Distance"], mr2.inputs["Value"])
+        bt.links.new(mr2.outputs["Result"], mul.inputs[1])
 
 
 def world_trilight():
@@ -251,7 +270,7 @@ def lights(cols, rows):
     sp.spot_blend = 0.6
     sp.shadow_soft_size = 0.8
     spo = bpy.data.objects.new("FurnaceSpot", sp)
-    half_w = cols * CELL / 2
+    half_w = cols * CELL / 2 + LANE_W                    # wall face
     spo.location = (-half_w - 0.5, (rows / 2 + 3) * CELL, 6.0)
     target = Vector((half_w, rows * CELL * 0.15, 1.5))   # right wall, mid-board
     spo.rotation_euler = (target - spo.location).to_track_quat("-Z", "Y").to_euler()
@@ -336,7 +355,10 @@ def kitsheet(out, res):
     for r, names in enumerate(rows):
         for i, n in enumerate(names):
             place(k[n], (i * 5.0, 0, (2 - r) * 6.5), 0, coll)
-    place(k["T1_FloorStrip_W7_A"], (5.0, -2.6, -1.2), 0, coll)
+    for r, key in enumerate(("start", "mid", "end")):
+        for i, n in enumerate(LANES[key]):
+            place(k[n], (i * 5.0, -0.2, (2 - r) * 6.5), 0, coll)
+    place(k["T1_FloorStrip_W9_A"], (5.0, -2.6, -1.2), 0, coll)
     for i, n in enumerate(("T1_Prop_Hook", "T1_Prop_BellShard", "T1_Prop_Ladle")):
         place(k[n], (16.0 + i * 1.8, -0.6, 4.2 if n == "T1_Prop_Hook" else 13.6), 0, coll)
     for sx in (-1, 1):

@@ -49,12 +49,17 @@ REGIONS = {
     "clay":    ((768, 256, 1024, 512), "fit", (CELL, CELL)),
     "bronze":  ((768, 512, 1024, 768), "fit", (CELL, CELL)),
     "pilaster": ((768, 832, 832, 1024), "fit", (0.28, 1.1)),
+    "floor_c": ((864, 864, 1024, 1024), "fit", (CELL, CELL)),
+    "glow":    ((832, 832, 864, 864), "swatch", (1, 1)),
 }
+EMIT = os.path.join(ROOT, "textures", "T1_Scenery_Emit.png")
+BEAM_REG = "beam"        # faces tagged with this go to material slot 1 (T1_Beam, additive, vertex alpha)
 SWATCH_NAMES = ["iron", "iron_hi", "chain", "soot", "mortar", "wood", "copper", "rust",
                 "stone_dk", "stone", "teal", "deep", "clay", "bronze", "patina", "water"]
 for i, n in enumerate(SWATCH_NAMES):
     x, y = 768 + (i % 8) * 32, 768 + (i // 8) * 32
     REGIONS["sw_" + n] = ((x, y, x + 32, y + 32), "swatch", (1, 1))
+REGIONS[BEAM_REG] = ((0, 0, 1, 1), "swatch", (1, 1))
 REG_IDS = {n: i for i, n in enumerate(REGIONS)}
 REG_NAMES = list(REGIONS)
 
@@ -65,6 +70,7 @@ class Builder:
     def __init__(self):
         self.bm = bmesh.new()
         self.reg = self.bm.faces.layers.int.new("reg")
+        self.beam_alpha = None   # fn(co) -> alpha for beam faces; set when the piece has a light shaft
 
     def face(self, pts, region, want_normal=None):
         vs = [self.bm.verts.new(p) for p in pts]
@@ -186,6 +192,8 @@ class Builder:
         bm = self.bm
         bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
         uv = bm.loops.layers.uv.new("UVMap")
+        bm.faces.ensure_lookup_table()
+        self.poly_reg = [f[self.reg] for f in bm.faces]
         for f in bm.faces:
             assign_uv(f, uv, REG_NAMES[f[self.reg]])
         me = bpy.data.meshes.new(name)
@@ -195,6 +203,15 @@ class Builder:
             p.use_smooth = False
         ob = bpy.data.objects.new(name, me)
         ob.data.materials.append(scenery_material())
+        if self.beam_alpha:
+            ob.data.materials.append(beam_material())
+            col = me.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+            for poly in me.polygons:
+                is_beam = REG_NAMES[self.poly_reg[poly.index]] == BEAM_REG
+                poly.material_index = 1 if is_beam else 0
+                for li in poly.loop_indices:
+                    a = self.beam_alpha(me.vertices[me.loops[li].vertex_index].co) if is_beam else 1.0
+                    col.data[li].color = (1, 1, 1, a)
         return ob
 
 
@@ -249,10 +266,48 @@ def scenery_material():
     tex.image.colorspace_settings.name = "sRGB"
     tex.interpolation = "Linear"
     nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    em = nt.nodes.new("ShaderNodeTexImage")       # emission mask (window panes only)
+    em.image = bpy.data.images.load(EMIT, check_existing=True)
+    em.image.colorspace_settings.name = "sRGB"
+    nt.links.new(em.outputs["Color"], bsdf.inputs["Emission Color"])
+    bsdf.inputs["Emission Strength"].default_value = EMIT_STRENGTH
     bsdf.inputs["Roughness"].default_value = 0.9
     if "Specular IOR Level" in bsdf.inputs:
         bsdf.inputs["Specular IOR Level"].default_value = 0.2
     _MAT = m
+    return m
+
+
+EMIT_STRENGTH = 4.0        # Blender preview; Unity: Emission colour white x map, HDR intensity about +1
+BEAM_RGB = (232, 164, 86)  # same warm as the pane
+_BEAM = None
+
+
+def beam_material():
+    """Light shaft: additive, colour x vertex alpha (Unity: URP Particles/Unlit, Additive, vertex colour on)."""
+    global _BEAM
+    if _BEAM:
+        return _BEAM
+    m = bpy.data.materials.new("T1_Beam")
+    m.use_nodes = True
+    m.surface_render_method = "BLENDED"
+    m.use_backface_culling = False
+    nt = m.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    attr = nt.nodes.new("ShaderNodeVertexColor")
+    attr.layer_name = "Col"
+    emis = nt.nodes.new("ShaderNodeEmission")
+    emis.inputs["Color"].default_value = tuple((c / 255) ** 2.2 for c in BEAM_RGB) + (1,)
+    mul = nt.nodes.new("ShaderNodeMath"); mul.operation = "MULTIPLY"; mul.inputs[1].default_value = 1.2
+    nt.links.new(attr.outputs["Alpha"], mul.inputs[0])
+    nt.links.new(mul.outputs[0], emis.inputs["Strength"])
+    tr = nt.nodes.new("ShaderNodeBsdfTransparent")
+    add = nt.nodes.new("ShaderNodeAddShader")
+    nt.links.new(emis.outputs[0], add.inputs[0])
+    nt.links.new(tr.outputs[0], add.inputs[1])
+    nt.links.new(add.outputs[0], out.inputs["Surface"])
+    _BEAM = m
     return m
 
 
@@ -542,12 +597,134 @@ def mod_collapse():
     return b
 
 
+def mod_window_pier():
+    """Tall pier with a pointed-arch window high up; the pane glows (emission mask) and a light shaft falls
+    from it into the corridor. Front on the collision line like the other piers."""
+    b = Builder()
+    depth = D + 0.35
+    wx, z0, z1, apex, top, rec = 0.3, 3.5, 5.45, 5.8, 6.0, 0.3
+    b.box((-HALF, 0.0, 0.0), (HALF, depth, z0), "stone", skip=("+y", "-z"))
+    b.box((-HALF, 0.0, z0), (-wx, depth, top), "stone", skip=("+y", "-z"))
+    b.box((wx, 0.0, z0), (HALF, depth, top), "stone", skip=("+y", "-z"))
+    b.box((-wx, 0.0, apex), (wx, depth, top), "stone", skip=("+y", "-z", "-x", "+x"))
+    for sx in (-1, 1):   # arch spandrels and soffits
+        b.face([(sx * wx, 0, z1), (0, 0, apex), (sx * wx, 0, apex)], "stone", (0, -1, 0))
+        b.face([(sx * wx, 0, z1), (sx * wx, rec, z1), (0, rec, apex), (0, 0, apex)], "stone", (0, 0, -1))
+    b.face([(-wx, rec, z0), (wx, rec, z0), (wx, rec, z1), (0, rec, apex), (-wx, rec, z1)], "glow", (0, -1, 0))
+    b.box((-HALF - 0.08, -0.16, top), (HALF + 0.08, depth + 0.1, top + 0.32), "stone", skip=("-z",))
+    b.box((-HALF - 0.01, -0.03, 3.0), (HALF + 0.01, depth, 3.16), "iron", skip=("+y", "-z", "+z"))
+    # glowing reveals: sill (seen from above) and jambs carry the pane colour, so the opening reads as lit
+    b.face([(-wx, 0.0, z0), (-wx, rec, z0), (wx, rec, z0), (wx, 0.0, z0)], "glow", (0, 0, 1))
+    b.face([(-wx, 0.0, z0), (-wx, 0.0, z1), (-wx, rec, z1), (-wx, rec, z0)], "glow", (1, 0, 0))
+    b.face([(wx, 0.0, z0), (wx, rec, z0), (wx, rec, z1), (wx, 0.0, z1)], "glow", (-1, 0, 0))
+    # warm light pool on the lane floor under the window (additive fan, alpha 0 at the rim), off the board
+    cx, cy, rx, ry, n, pz = -0.3, -0.55, 1.15, 0.48, 12, 0.05   # pz above the raised floor slabs
+    rim = [(cx + rx * math.cos(2 * math.pi * i / n), cy + ry * math.sin(2 * math.pi * i / n), pz) for i in range(n)]
+    for i in range(n):
+        b.face([(cx, cy, pz), rim[i], rim[(i + 1) % n]], BEAM_REG, (0, 0, 1))
+    b.beam_alpha = lambda co: max(0.0, 0.42 * (1 - math.hypot((co.x - cx) / rx, (co.y - cy) / ry)))
+    return b
+
+
+# ---------------------------------------------------------------- prop lane (one cell between board and wall)
+LANE_W = CELL          # lane width; the kerb front is the board edge / collision line
+KERB_W, KERB_H = 0.2, 0.14
+
+
+def lane_trough(b, x, ln=1.5):
+    y0, y1, th, w = -0.86, -0.22, 0.44, 0.08
+    x0, x1 = x - ln / 2, x + ln / 2
+    b.box((x0, y0, 0), (x1, y0 + w, th), "stone", skip=("-z",))
+    b.box((x0, y1 - w, 0), (x1, y1, th), "stone", skip=("-z", "+y"))
+    b.box((x0, y0 + w, 0), (x0 + w, y1 - w, th), "stone", skip=("-z", "-y", "+y"))
+    b.box((x1 - w, y0 + w, 0), (x1, y1 - w, th), "stone", skip=("-z", "-y", "+y"))
+    b.face([(x0 + w, y0 + w, th - 0.1), (x1 - w, y0 + w, th - 0.1), (x1 - w, y1 - w, th - 0.1), (x0 + w, y1 - w, th - 0.1)], "sw_water", (0, 0, 1))
+
+
+MOULD_PROF = [(0.40, 0.0), (0.39, 0.55), (0.33, 1.2), (0.27, 1.75), (0.2, 2.15), (0.12, 2.37)]
+
+
+def lane_mould(b, x, y=-0.5, tipped=False, rz=0.0, s=0.55, seed=11):
+    m = Builder()
+    m.lathe_shell(MOULD_PROF, 0.0, math.pi, 6, 0.07, "clay", jitter=0.03, seed=seed)
+    if tipped:   # lying on its side along the lane, hollow toward the board
+        mat = Matrix.Translation((x, y, 0.40 * s)) @ Matrix.Rotation(math.radians(rz), 4, "Z") \
+            @ Matrix.Rotation(math.radians(90), 4, "Y") @ Matrix.Rotation(math.radians(180), 4, "Z") @ Matrix.Scale(s, 4)
+    else:        # standing, hollow toward the board
+        mat = Matrix.Translation((x, y + 0.2, 0)) @ Matrix.Rotation(math.radians(rz), 4, "Z") @ Matrix.Scale(s, 4)
+    merge_into(b, m, mat)
+
+
+def lane_bell(b, x, y=-0.5, broken=False, tilt=0.0, rz=0.0):
+    m = Builder()
+    prof = [(0.42, 0.0), (0.40, 0.08), (0.31, 0.3), (0.26, 0.58), (0.26, 0.82), (0.18, 0.95), (0.06, 1.0)]
+    a1 = 2 * math.pi - (1.3 if broken else 0.0)
+    m.lathe_shell(prof, 0.0, a1, 8, 0.045, "bronze", rims=True)
+    m.box((-0.07, -0.03, 1.0), (0.07, 0.03, 1.12), "sw_bronze", skip=("-z",))
+    merge_into(b, m, Matrix.Translation((x, y, 0)) @ Matrix.Rotation(math.radians(rz), 4, "Z")
+               @ Matrix.Rotation(math.radians(tilt), 4, "X") @ Matrix.Scale(0.85, 4))
+
+
+def lane_rubble(b, x, y=-0.45, n=4, seed=1):
+    rnd = random.Random(seed)
+    for i in range(n):
+        sx, sy, sz = rnd.uniform(0.14, 0.3), rnd.uniform(0.12, 0.24), rnd.uniform(0.08, 0.18)
+        r = Builder()
+        r.box((-sx / 2, -sy / 2, 0), (sx / 2, sy / 2, sz), rnd.choice(("stone", "sw_stone_dk")), skip=("-z",))
+        merge_into(b, r, Matrix.Translation((x + rnd.uniform(-0.35, 0.35), y + rnd.uniform(-0.25, 0.25), 0))
+                   @ Matrix.Rotation(math.radians(rnd.uniform(0, 90)), 4, "Z"))
+
+
+def lane_chain_pile(b, x, y=-0.5):
+    for (dx, dy, ang, n) in ((-0.5, 0.05, 10, 5), (0.15, -0.12, -25, 4), (0.55, 0.12, 60, 3)):
+        c = Builder()
+        chain(c, 0, 0, 0, n)
+        merge_into(b, c, Matrix.Translation((x + dx, y + dy, 0.07)) @ Matrix.Rotation(math.radians(ang), 4, "Z")
+                   @ Matrix.Rotation(math.radians(90), 4, "Y"))
+
+
+def lane_ladle(b, x, y=-0.32, lying=False):
+    m = prop_ladle()
+    if lying:
+        mat = Matrix.Translation((x, y - 0.1, 0.03)) @ Matrix.Rotation(math.radians(-8), 4, "Z") @ Matrix.Rotation(math.radians(-74), 4, "Y")
+    else:        # leaning on the wall, handle up toward +x
+        mat = Matrix.Translation((x, y, 0)) @ Matrix.Rotation(math.radians(12), 4, "Z") @ Matrix.Rotation(math.radians(-8), 4, "X")
+    merge_into(b, m, mat)
+
+
+def lane_shard(b, x, y=-0.5, rz=0.0):
+    merge_into(b, prop_bell_shard(), Matrix.Translation((x, y, 0)) @ Matrix.Rotation(math.radians(rz), 4, "Z")
+               @ Matrix.Rotation(math.radians(-18), 4, "X") @ Matrix.Scale(0.55, 4))
+
+
+LANES = {
+    "T1_Lane_Start_A": ("start", lambda b: (lane_trough(b, -0.9), lane_ladle(b, 1.0))),
+    "T1_Lane_Start_B": ("start", lambda b: (lane_trough(b, -1.2, 1.4), lane_trough(b, 1.05, 1.4))),
+    "T1_Lane_Start_C": ("start", lambda b: (lane_mould(b, -1.25), lane_rubble(b, 0.4, seed=3), lane_ladle(b, 1.4, lying=True))),
+    "T1_Lane_Mid_A": ("mid", lambda b: (lane_mould(b, -1.35), lane_mould(b, 0.25, tipped=True, rz=8, seed=5), lane_shard(b, 1.6, rz=20))),
+    "T1_Lane_Mid_B": ("mid", lambda b: (lane_trough(b, -0.95), lane_bell(b, 1.25))),
+    "T1_Lane_Mid_C": ("mid", lambda b: (lane_mould(b, -1.0, tipped=True, rz=-6), lane_ladle(b, 0.9), lane_rubble(b, 1.75, n=3, seed=8))),
+    "T1_Lane_End_A": ("end", lambda b: (lane_bell(b, -0.9, broken=True, tilt=-8, rz=30), lane_shard(b, 0.55, rz=-30), lane_shard(b, 1.5, rz=50), lane_rubble(b, 0.1, n=3, seed=9))),
+    "T1_Lane_End_B": ("end", lambda b: (lane_mould(b, -1.3, tipped=True, rz=12, seed=4), lane_rubble(b, 0.4, n=6, seed=12), lane_rubble(b, 1.5, n=4, seed=13))),
+    "T1_Lane_End_C": ("end", lambda b: (lane_chain_pile(b, -0.6), lane_rubble(b, 1.2, n=5, seed=14))),
+}
+
+
+def lane(name, dress):
+    """Prop lane for one 4-row group, same origin and orientation as the wall segment beside it (origin on the
+    wall line). Kerb front at y = -LANE_W = the board edge; props stay in -LANE_W + KERB_W .. 0."""
+    b = Builder()
+    b.box((-SEG_LEN / 2, -LANE_W, 0), (SEG_LEN / 2, -LANE_W + KERB_W, KERB_H), "stone", skip=("-x", "+x", "-z"))
+    dress(b)
+    return b.to_object(name)
+
+
 MODULES = {
     "brick_a": wall_brick_a, "brick_b": wall_brick_b, "rib": wall_iron_rib,
     "chain": wall_chain,
     "chain_heavy": lambda: wall_chain(((-0.2, 6), (0.2, 7)), slack=True),
     "mould": wall_mould, "trough": wall_trough, "pillar": corner_pillar,
-    "buttress": mod_buttress, "collapse": mod_collapse,
+    "buttress": mod_buttress, "collapse": mod_collapse, "window": mod_window_pier,
 }
 
 # props baked into a module: (builder fn, matrix in the module's local frame)
@@ -567,14 +744,14 @@ SEG_LEN = SEG_CELLS * CELL        # 4.5
 SEGMENTS = {
     # start: the town-side upper foundry, intact brick, iron ribs, hoists
     "T1_Start_A": ("start", ["brick_a", ("rib", "hook"), "chain", "brick_a"]),
-    "T1_Start_B": ("start", ["brick_a", "pillar", "rib", "brick_a"]),
+    "T1_Start_B": ("start", ["brick_a", "window", "rib", "brick_a"]),
     "T1_Start_C": ("start", ["brick_a", ("trough", "ladle"), ("rib", "hook"), "brick_a"]),
     # mid: the working yard, sooty and damaged
-    "T1_Mid_A": ("mid", ["brick_b", "mould", "pillar", "brick_a"]),
+    "T1_Mid_A": ("mid", ["brick_b", "mould", "window", "brick_a"]),
     "T1_Mid_B": ("mid", ["brick_a", ("trough", "ladle"), "brick_b", "brick_b"]),
     "T1_Mid_C": ("mid", ["brick_b", "chain", "pillar", "brick_b"]),
     # end: the approach to the casting pit, buttressed, collapsing, heavy chains
-    "T1_End_A": ("end", ["brick_b", "buttress", "mould", "brick_b"]),
+    "T1_End_A": ("end", ["brick_b", "window", "mould", "brick_b"]),
     "T1_End_B": ("end", ["brick_b", ("collapse", "shard"), "buttress", "brick_b"]),
     "T1_End_C": ("end", ["brick_b", "chain_heavy", "buttress", "brick_b"]),
 }
@@ -582,7 +759,7 @@ SEGMENTS = {
 
 REC = 0.16           # brick panels sit this far behind the collision line; iron posts stand on it
 POST_HW = 0.14       # post half width
-PIERS = {"pillar", "buttress"}               # full-depth modules: stay on the line, no post beside them
+PIERS = {"pillar", "buttress", "window"}               # full-depth modules: stay on the line, no post beside them
 NO_POST = PIERS | {"collapse"}
 
 
@@ -610,6 +787,9 @@ def segment(name, mods):
             fn, mat = PROP_MOUNTS[prop]
             merge_into(mb, fn(), mat())
         rec = 0.0 if key in PIERS else REC
+        if mb.beam_alpha:   # alpha is defined in the module frame: undo the cell shift
+            dx = (i - (SEG_CELLS - 1) / 2) * CELL
+            b.beam_alpha = lambda co, f=mb.beam_alpha, dx=dx, dy=rec: f(Vector((co.x - dx, co.y - dy, co.z)))
         merge_into(b, mb, Matrix.Translation(((i - (SEG_CELLS - 1) / 2) * CELL, rec, 0)))
     # iron posts on cell boundaries (half posts at both ends, so every segment joint gets one full post)
     xs = [(j - SEG_CELLS / 2) * CELL for j in range(SEG_CELLS + 1)]
@@ -623,7 +803,7 @@ def segment(name, mods):
     return b.to_object(name)
 
 
-SLAB_H, SLAB_BEV = 0.035, 0.07    # floor slab: raised top, chamfered edge (reads as the concept's chunky flagstones)
+SLAB_H, SLAB_BEV = 0.03, 0.04    # floor slab: raised top, chamfered edge (reads as the concept's chunky flagstones)
 
 
 def floor_strip(cols, variant):
@@ -635,7 +815,7 @@ def floor_strip(cols, variant):
     for i in range(cols):
         for j in range(SEG_CELLS):
             cx, cy = (i - (cols - 1) / 2) * CELL, (j - (SEG_CELLS - 1) / 2) * CELL
-            reg = "floor_b" if rnd.random() < p_b else "floor_a"
+            reg = "floor_b" if rnd.random() < p_b else ("floor_a" if (i + j) % 2 == 0 else "floor_c")
             h = SLAB_H + rnd.uniform(-0.012, 0.012)
             o, t = HALF, HALF - SLAB_BEV
             lo = [(cx - o, cy - o, 0), (cx + o, cy - o, 0), (cx + o, cy + o, 0), (cx - o, cy + o, 0)]
@@ -644,7 +824,7 @@ def floor_strip(cols, variant):
             for e in range(4):
                 a, c = e, (e + 1) % 4
                 mid = ((lo[a][0] + lo[c][0]) / 2 - cx, (lo[a][1] + lo[c][1]) / 2 - cy, 0.5)
-                b.face([lo[a], lo[c], hi[c], hi[a]], "sw_stone_dk", mid)
+                b.face([lo[a], lo[c], hi[c], hi[a]], "sw_mortar", mid)
     return b.to_object(f"T1_FloorStrip_W{cols}_{'AB'[variant]}")
 
 
@@ -704,7 +884,8 @@ def _prop(fn, name):
 
 PIECES = (
     [("segment:" + SEGMENTS[n][0], (lambda n=n: segment(n, SEGMENTS[n][1]))) for n in SEGMENTS]
-    + [("floor", (lambda c=c, v=v: floor_strip(c, v))) for c in (7, 9, 11, 13) for v in (0, 1)]
+    + [("lane:" + LANES[n][0], (lambda n=n: lane(n, LANES[n][1]))) for n in LANES]
+    + [("floor", (lambda c=c, v=v: floor_strip(c, v))) for c in (9, 11, 13, 15) for v in (0, 1)]
     + [("prop", _prop(prop_hook, "T1_Prop_Hook")), ("prop", _prop(prop_bell_shard, "T1_Prop_BellShard")),
        ("prop", _prop(prop_ladle, "T1_Prop_Ladle"))]
     + [("gate", gate_tower), ("gate", gate_lintel)]

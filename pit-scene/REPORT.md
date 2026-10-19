@@ -53,8 +53,15 @@ Clean room: I read only `ballpit-spec/style.md`, `ballpit-spec/spec.md` §0–1,
      - The concept's floor props stand in play cells.
      - The concept is brighter than the art bible's scenery values.
 
+8. **Prop lane, windows, floor and brightness (user requests, 2026-10-19):**
+   - **Prop lane:** a 1-cell prop lane outside the board holds the concept's floor props. A kerb marks the board edge. The walls move out one cell.
+   - **Windows:** glowing arched windows on three segments, with warm light pools.
+   - **Floor:** a chessboard with black seams.
+   - **Brightness:** atlas floor and brick brightened, V p50 18 → 21 %, still ≤ 33 %.
+   - **Camera:** the lane needs the camera fit margin to go from 0.5 to 1.5 cells (7×9 at 18.2 units). This was proposed to the main session.
+
 ## Proposals for art-bible.md (not applied)
-- §3 Theme 1 local light: add "optional cool fill (#5A6B78, point light, low intensity, near end, no shadows), so the wall opposite the furnace reads". This is the only way I see to light both walls without a board shadow.
+- §3 Theme 1 emissive: allow window panes as a light source (applied in the kit at the user's request). Also: add "optional cool fill (#5A6B78, point light, low intensity, near end, no shadows), so the wall opposite the furnace reads". This is the only way I see to light both walls without a board shadow.
 - §3 wall kit list: replace the per-cell wall list with "three 4-cell segment sets (start / mid / end) for the scrolling corridor, plus an end-of-corridor gate". The pillar is now a pier inside segments, not a run-end cap.
 
 ## Not verified

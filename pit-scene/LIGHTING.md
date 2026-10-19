@@ -65,9 +65,9 @@ A yaw of 10–20° would light one wall, but that wall then throws a shadow abou
 | On board expansion | Recompute the position and aim from the new cols/rows and tween with the walls |
 
 ## Floor
-- The floor is one `T1_FloorStrip_W{cols}` per 4-row group (ASSEMBLY.md §4). It scrolls and recycles with the walls. About 1 strip in 3 is the more-cracked B variant.
-- Each cell shows 2×2 slabs separated by a hairline, with a wide joint on the cell border. The cell grid therefore reads at exactly 1.125 units, and strips join without a seam.
-- The floor albedo is V 12–17 %. Lit, it reads lighter than the walls and darker than every unit.
+- The floor is one `T1_FloorStrip_W{cols+2}` per 4-row group (board plus both prop lanes) (ASSEMBLY.md §4). It scrolls and recycles with the walls. About 1 strip in 3 is the more-cracked B variant.
+- Each cell is one bevelled slab with a black seam. Tones alternate like a chessboard (floor A / floor C), so the cell grid reads at exactly 1.125 units. Strips join without a seam.
+- The floor albedo is V 15–22 % (brightened 2026-10-19 toward the concept). Lit, it reads lighter than the walls and darker than every unit.
 
 ## Corridor depth and the gate
 - No ceiling and no far wall. The linear fog above ends the corridor: at 7×9 it is fully fogged from about k = 12, and the live run reaches k = 19.
@@ -75,6 +75,11 @@ A yaw of 10–20° would light one wall, but that wall then throws a shadow abou
 - **Gate renderers: Cast Shadows Off.** The key light runs along the corridor, so the lintel would throw a shadow band across the whole board.
 - The copper spot stays put as the corridor scrolls. It lights whatever segment passes, so it needs no animation.
 
+## Windows (Theme 1 furnace glow, added 2026-10-19 at the user's request)
+- Three wall segments have a pier with a pointed-arch window. The pane, sill and reveals emit warm #E8A456 through `T1_Scenery_Emit.png` (Unity: emission colour white, HDR intensity about +1).
+- Below each window is an additive pool of light on the lane floor (`T1_Beam`, alpha 0.42 → 0). It is a mesh, not a real light, so it costs nothing.
+- The copper spot stays as it is. The windows read as its source.
+
 ## Not in this scene (on purpose)
-- No emissive surfaces on the scenery. The copper strap plate on the pillars is albedo only (#543A26, V 33 %).
+- No emissive surfaces on the scenery apart from the window panes. The copper strap plates are albedo only (#543A26, V 33 %).
 - No ambient occlusion bake. The wall soot gradient is painted into the atlas.
