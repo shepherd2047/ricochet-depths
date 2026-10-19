@@ -60,6 +60,11 @@ Clean room: I read only `ballpit-spec/style.md`, `ballpit-spec/spec.md` §0–1,
    - **Brightness:** atlas floor and brick brightened, V p50 18 → 21 %, still ≤ 33 %.
    - **Camera:** the lane needs the camera fit margin to go from 0.5 to 1.5 cells (7×9 at 18.2 units). This was proposed to the main session.
 
+9. **Camera and brightness ruled (2026-10-19):**
+   - Camera tilt 40°, fit margin 1.0 cell: 7×9 at 17.4 units from the board centre.
+   - Scenery main colours at V 25–33 %. Brick, stone and floor now sit at V 25–31 %; brick highlights are clamped at 33 %.
+   - Previews re-rendered.
+
 ## Proposals for art-bible.md (not applied)
 - §3 Theme 1 emissive: allow window panes as a light source (applied in the kit at the user's request). Also: add "optional cool fill (#5A6B78, point light, low intensity, near end, no shadows), so the wall opposite the furnace reads". This is the only way I see to light both walls without a board shadow.
 - §3 wall kit list: replace the per-cell wall list with "three 4-cell segment sets (start / mid / end) for the scrolling corridor, plus an end-of-corridor gate". The pillar is now a pier inside segments, not a run-end cap.

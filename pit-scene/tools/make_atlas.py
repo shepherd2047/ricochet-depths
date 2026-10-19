@@ -72,9 +72,9 @@ def bricks(w, h, bw, bh, cracked=False):
         for c in range(-1, w // bw + 1):
             x0 = c * bw + off
             t = rng.random()
-            col = R1 + (R2 - R1) * (0.4 + 0.6 * t)
+            col = R2 + (R3 - R2) * (0.1 + 0.6 * t)            # main brick colour V 26-31 % (style.md 4 as ruled)
             if rng.random() < 0.12:
-                col = R3 * 0.85
+                col = R3 * 0.97
             if cracked and rng.random() < 0.18:
                 col = SOOT * 1.1
             col = col * (1 + rng.normal(0, 0.04))
@@ -95,8 +95,10 @@ def bricks(w, h, bw, bh, cracked=False):
         out[y0 + 3:y0 + 5] = np.where(out[y0 + 3:y0 + 5] > MORTAR + 1, out[y0 + 3:y0 + 5] * 1.18, out[y0 + 3:y0 + 5])
         out[y0 + bh - 3:y0 + bh] *= 0.82
     # soot gradient: darker toward the floor (v bottom of region = floor level)
-    grad = np.linspace(1.0, 0.8, h, dtype=np.float32)[:, None, None]
+    grad = np.linspace(1.0, 0.9, h, dtype=np.float32)[:, None, None]
     out *= grad
+    vmax = out.max(axis=2, keepdims=True)              # clamp to the scenery ceiling V 33 % (style.md 4)
+    out *= np.minimum(1.0, (0.33 * 255) / np.maximum(vmax, 1e-3))
     if cracked:
         for _ in range(5):  # a few dark crack polylines
             x, y = rng.integers(0, w), rng.integers(0, h)
@@ -137,7 +139,7 @@ def flagstone(sz, cracked=False, tone=0.0):
     half = sz // 2
     for i in range(2):
         for j in range(2):
-            col = R1 + (R2 - R1) * (0.3 + tone + 0.1 * rng.random()) + rng.normal(0, 0.8)
+            col = R2 + (R3 - R2) * (0.1 + tone + 0.1 * rng.random()) + rng.normal(0, 0.8)   # V 26-31 %
             out[i * half:(i + 1) * half, j * half:(j + 1) * half] = col
     out += noise(sz, sz, 16, 1.8)
     j = max(3, sz // 50)            # thin black seam on every cell edge (the modelled bevel adds the relief)

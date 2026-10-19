@@ -4,29 +4,36 @@ Values for Unity URP. The Blender previews use the same numbers (`tools/assemble
 
 Frame: the board stands in Unity's XY plane and the camera looks along +Z. Pieces sit under a `PitRoot` (see ASSEMBLY.md), so the pit floor faces the camera and the far end of the pit is screen-up (+Y).
 
-## Camera (style.md §2 as ruled 2026-10-19: perspective, about 30° down, from behind and above the player)
+## Camera (style.md §2 as ruled 2026-10-19, second ruling: perspective, 40° tilt, prop lane in frame)
 | Setting | Value |
 |---|---|
-| Projection | Perspective, vertical FOV 65° |
+| Projection | Perspective, vertical FOV **65°** |
 | Clear | Solid colour **#262937** (38, 41, 55), the same as the fog |
-| Pitch | **30° from looking straight down at the board**, tipped toward the far end: the camera sits behind and above the player. In Unity's XY board frame that is Euler X = −30°. The board stays a flat 2D plane. |
-| Fit | Under perspective the **near row** is the widest row on screen, so it is the binding constraint. Fit the near row's corners, plus half a cell each side, to the screen width. The far row then fills about 71 % of the width (style.md's "far row fits 7 columns" holds automatically). Centre the board vertically on screen. |
-| Look-at point / distance along the view axis / distance to board centre | 7×9: z = −0.85 / **14.66** / 15.1 · 9×11: −1.02 / 18.28 / 18.8 · 11×13: −1.19 / 21.90 / 22.5 · 13×15: −1.36 / **25.51** / 26.2 (PitRoot-local z along the pit) |
-| Camera position (PitRoot local: x, y = height above floor, z) | 7×9: (0, 12.70, −8.18) · 13×15: (0, 22.10, −14.12) |
+| Pitch | **40° from looking straight down at the board**, tipped toward the far end: the camera sits behind and above the player. In Unity's XY board frame that is camera rotation **Euler (−40, 0, 0)**. The board stays a flat 2D plane. |
+| Fit | Under perspective the **near row** is the widest row on screen, so it is the binding constraint. Fit the near row's corners plus **1.0 cell each side** (the prop lane) to the screen width. Centre the board vertically on screen. |
 | Clip | Near 0.3, far 1000 |
-| Bloom / HDR | Bloom on, threshold about 1.0 (linear). Scenery never exceeds V 33 %, so only balls, VFX and enemy eyes bloom. |
+| Bloom / HDR | Bloom on, threshold about 1.0 (linear). Scenery albedo never exceeds V 33 %, so only balls, VFX, enemy eyes and (slightly) the window panes bloom. |
 
-**Distance vs style.md's 10–12 units:** at FOV 65° the 7×9 board with half-cell margins needs 15.1 units from the board centre (14.0 at FOV 70°). At 10–12 the outer columns of the near rows fall off-screen. Either accept about 15, or drop the near-row margin to about 0 and use FOV 70° (that gives about 12.5). `fit_camera()` in `tools/assemble.py` solves this for any FOV and board size.
+Fitted values (PitRoot-local; z runs along the pit, y is height above the floor):
+
+| Board | Look-at z | Distance along view axis | Distance to board centre | Camera position (x, y, z) | Fog start / end |
+|---|---|---|---|---|---|
+| 7×9 | −0.95 | **16.77** | 17.40 | (0, 12.85, −11.73) | 18.8 / 30.8 |
+| 9×11 | −1.16 | 20.50 | 21.26 | (0, 15.70, −14.34) | 22.5 / 34.5 |
+| 11×13 | −1.37 | 24.23 | 25.13 | (0, 18.56, −16.94) | 26.2 / 38.2 |
+| 13×15 | −1.58 | **27.95** | 28.99 | (0, 21.41, −19.55) | 30.0 / 42.0 |
+
+`fit_camera()` in `tools/assemble.py` (defaults `--tilt 40 --margin 1.0 --fov 65`) solves this for any board size. At margin 1.0 the near rows show the lane fully, and the wall starts just at the screen edge. The wall comes into view further up the screen.
 
 ## Fog
 | Setting | Value |
 |---|---|
 | Mode | Linear |
 | Colour | **#262937** (38, 41, 55) |
-| Start / end | **camera distance (to the look-at point) + 2 / + 14**: 7×9 → **16.7 / 28.7**; 9×11 → 20.3 / 32.3; 11×13 → 23.9 / 35.9; 13×15 → **27.5 / 39.5** |
+| Start / end | **camera distance (to the look-at point) + 2 / + 14**: see the camera table (7×9 → **18.8 / 30.8**; 13×15 → **30.0 / 42.0**) |
 | On board expansion | Tween start and end together with the camera pull-back (3 s) |
 
-style.md §3 still says 30/50. With the pitched camera at 15–26 units, 30/50 fogs nothing at 7×9 and half the board at 13×15. Offsets that follow the camera keep the board clear and dissolve the far trench at every size.
+style.md §3 still says 30/50. With the pitched camera at 17–28 units, 30/50 fogs nothing at 7×9 and half the board at 13×15. Offsets that follow the camera keep the board clear and dissolve the far trench at every size.
 
 ## Ambient (Environment Lighting → Source: Gradient)
 | | sRGB | Hex |
@@ -41,7 +48,7 @@ Intensity multiplier 1. No skybox and no reflection probe: set Environment Refle
 |---|---|
 | Type | Directional, white #FFFFFF, intensity **1** |
 | Rotation | Euler **(10, 0, 0)** in Unity world: it shines almost straight into the screen, tipped 10° downward (toward the player end) |
-| Shadows | Soft. Strength 0.8, distance **40**: style.md says 30, but at 13×15 the camera is 26 away. Main light only. |
+| Shadows | Soft. Strength 0.8, distance **45**: at 13×15 the camera is 29 away. Main light only. |
 
 Inner wall faces lie parallel to this light, so they get almost no direct light from it. The wall fill below lights them, so the walls still stay a little darker than the board.
 
@@ -67,7 +74,7 @@ A yaw of 10–20° would light one wall, but that wall then throws a shadow abou
 ## Floor
 - The floor is one `T1_FloorStrip_W{cols+2}` per 4-row group (board plus both prop lanes) (ASSEMBLY.md §4). It scrolls and recycles with the walls. About 1 strip in 3 is the more-cracked B variant.
 - Each cell is one bevelled slab with a black seam. Tones alternate like a chessboard (floor A / floor C), so the cell grid reads at exactly 1.125 units. Strips join without a seam.
-- The floor albedo is V 15–22 % (brightened 2026-10-19 toward the concept). Lit, it reads lighter than the walls and darker than every unit.
+- The floor albedo is V 26–31 % (style.md §4 as ruled 2026-10-19: main scenery colours V 25–33 %, ceiling 33 %). Lit, it reads lighter than the walls and darker than every unit.
 
 ## Corridor depth and the gate
 - No ceiling and no far wall. The linear fog above ends the corridor: at 7×9 it is fully fogged from about k = 12, and the live run reaches k = 19.
