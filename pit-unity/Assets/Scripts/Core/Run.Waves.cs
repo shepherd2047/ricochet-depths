@@ -241,6 +241,7 @@ namespace Pit.Core
             foreach (var o in Shots) { o.X += dx; o.Y += dy; }
             foreach (var o in Hazards) { o.X += dx; o.Y += dy; if (!float.IsNaN(o.FromX)) { o.FromX += dx; o.FromY += dy; } }
             P.X += dx; P.Y += dy;
+            FloorShift += dy;
             Shake = M.Max(Shake, 0.25f);
             if (ex.T >= ex.Dur)
             {

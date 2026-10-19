@@ -5,7 +5,9 @@
 //   • The 2D World/Glow layers of Gfx are parented to WorldRoot, which lays design space flat onto the board plane.
 //   • One white key light with soft shadows, a trilight ambient, linear fog in the background colour, and Bloom whose
 //     threshold only the over-bright Glow layer and emissive eyes reach.
-//   • Low-poly floor tiles, modular walls and broken pillars sinking into the fog; one pooled view per foe, boss and
+//   • The pit-scene corridor kit (ASSEMBLY.md, spec §1.3a): no ceiling, a long corridor whose floor strips and wall
+//     segments scroll toward the hero and recycle in 4-row groups, start → mid → end segments by run progress, and the
+//     casting-pit gate that rides in out of the fog for the final boss. One pooled view per foe, boss and
 //     the hero, animated at a stepped 10 fps. Heroes and foes are the art team's models (Models.Model, mapped below);
 //     the three bosses and the brood pods are still procedural (no models delivered yet).
 // The UI keeps its own orthographic camera, stacked on top as a URP overlay camera.
@@ -35,11 +37,7 @@ namespace Pit.Game
         readonly Transform root, board, units;
         readonly Material unitMat;
         readonly Shader unitShader;
-        readonly Mesh[] wallMods;
-        readonly GameObject floor;
-        readonly MeshFilter floorMf;
-        readonly List<GameObject> walls = new List<GameObject>();
-        int floorCols = -1, floorRows = -1;
+        readonly Light spot;
         Run lastRun;
 
         // game ids -> delivered models. Foes without a model of their own borrow the closest archetype (art-bible §5).
@@ -138,13 +136,24 @@ namespace Pit.Game
 
             var lg = new GameObject("Key Light");
             lg.transform.SetParent(root, false);
-            lg.transform.localRotation = Quaternion.Euler(-10, 0, 0);  // down into the pit, 10° toward the far wall, so shadows fall away from the camera
+            lg.transform.localRotation = Quaternion.Euler(10, 0, 0);   // LIGHTING.md: along the corridor, tipped 10° toward the player end
             var light = lg.AddComponent<Light>();
             light.type = LightType.Directional;
             light.color = Color.white;
             light.intensity = 1;
             light.shadows = LightShadows.Soft;
-            light.shadowStrength = 0.85f;
+            light.shadowStrength = 0.8f;
+
+            // LIGHTING.md theme light: the furnace mouth, a copper spot high behind the left wall at the far end
+            var sg = new GameObject("Furnace Spot");
+            sg.transform.SetParent(root, false);
+            spot = sg.AddComponent<Light>();
+            spot.type = LightType.Spot;
+            spot.color = new Color32(0xd9, 0x88, 0x41, 255);
+            spot.shadows = LightShadows.None;
+            spot.intensity = 60 * K * K;   // LIGHTING.md's 60 is for kit units; the world here is the kit scaled by K (inverse-square)
+            spot.range = 25 * K;
+            spot.spotAngle = 55; spot.innerSpotAngle = 30;
 
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = Sky;
@@ -172,11 +181,12 @@ namespace Pit.Game
             board.SetParent(root, false);
             units = new GameObject("Units").transform;
             units.SetParent(board, false);
-            floor = MakeObject("Floor", board, null, out floorMf);
-            var abyss = Models.Abyss(9, 14);
-            MeshFilter amf;
-            MakeObject("Abyss", board, abyss, out amf).GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            wallMods = Models.WallModules();
+            corridor = new GameObject("Corridor").transform;
+            corridor.SetParent(board, false);
+            sceneMat = new Material(sh) { name = "T1_Scenery", enableInstancing = true };
+            sceneMat.SetTexture("_MainTex", Resources.Load<Texture2D>("Scene/T1_Scenery_Atlas"));
+            sceneMat.SetFloat("_Textured", 1);
+            sceneMat.SetFloat("_TexEmit", 0);
         }
 
         GameObject MakeObject(string name, Transform parent, Mesh mesh, out MeshFilter mf)
@@ -322,8 +332,18 @@ namespace Pit.Game
         internal void DebugVisit(System.Action<Mesh, Vector3, Vector3, float> f, Run r)
         {
             if (!board.gameObject.activeSelf) return;
-            f(floorMf.sharedMesh, Vector3.zero, new Vector3(1, 1, 1), 0);
-            foreach (var w in walls) if (w.activeSelf) f(w.GetComponent<MeshFilter>().sharedMesh, w.transform.localPosition, new Vector3(1, 1, 1), 0);
+            var c = corridor.localPosition;
+            foreach (var gr in groups)
+            {
+                if (gr == null || !gr.T.gameObject.activeSelf) continue;
+                var gp = c + gr.T.localPosition * K;
+                if (gr.L.sharedMesh != null) f(gr.L.sharedMesh, gp + gr.L.transform.localPosition * K, new Vector3(K, K, K), 90);
+                if (gr.R.sharedMesh != null) f(gr.R.sharedMesh, gp + gr.R.transform.localPosition * K, new Vector3(K, K, K), -90);
+                if (gr.F.sharedMesh != null) f(gr.F.sharedMesh, gp, new Vector3(K, K, K), 0);
+            }
+            if (gate != null && gate.gameObject.activeSelf)
+                foreach (var pc in gatePieces)
+                    if (pc.sharedMesh != null) f(pc.sharedMesh, c + (gate.localPosition + pc.transform.localPosition) * K, pc.transform.localScale * K, 0);
             foreach (var kv in live) if (kv.Value.Go.activeSelf) f(kv.Value.Mf.sharedMesh, kv.Value.Go.transform.localPosition, Vector3.Scale(kv.Value.Go.transform.localScale, kv.Value.Body.transform.localScale), 0);
             if (hero != null && hero.Go.activeSelf) f(hero.Mf.sharedMesh, hero.Go.transform.localPosition, Vector3.Scale(hero.Go.transform.localScale, hero.Body.transform.localScale), Mathf.Round((r.P.Aim - 90) / 7.5f) * 7.5f);
         }
@@ -400,36 +420,176 @@ namespace Pit.Game
             return new Vector2(p.x / K, -p.y / K);
         }
 
-        void Scenery(Run r)
+        // ------------------------------------------------------------ corridor (pit-scene ASSEMBLY.md §4, LIGHTING.md)
+        // The kit lives under Corridor in kit units (pit-scene's Blender frame: x across, +y toward the far end, up is
+        // -z here), scaled by K. Corridor is pinned to the floor: it moves with Run.FloorShift, so units standing on the
+        // board keep their place on it. Group slots hold absolute group indices G; a group whose rows have passed
+        // k −16 is redrawn 9 groups further on, out in the fog.
+        const int Groups = 9;
+        static readonly string[][] Sets =
         {
-            int cols = Mathf.CeilToInt(r.Bw / Run.CELL - 0.01f), rows = Mathf.CeilToInt(r.Bh / Run.CELL - 0.01f);
-            if (cols != floorCols || rows != floorRows)
-            {
-                floorCols = cols; floorRows = rows;
-                floorMf.sharedMesh = Models.Floor(cols, rows);
-            }
-            floor.transform.localPosition = Vector3.zero;
-            // modular walls follow the board edges every frame, so they slide out smoothly while the pit expands
-            float w = r.Bw * K, h = r.Bh * K;
-            int n = 0;
-            for (int y = -1; y <= rows; y++) { Wall(n++, -0.5f, -(y + 0.5f), y * 7 + 1); Wall(n++, w + 0.5f, -(y + 0.5f), y * 5 + 3); }
-            for (int x = 0; x < cols; x++) { Wall(n++, x + 0.5f, 0.5f, x * 3 + 2); Wall(n++, x + 0.5f, -h - 0.5f, x * 11 + 5); }
-            for (int i = n; i < walls.Count; i++) if (walls[i].activeSelf) walls[i].SetActive(false);
+            new[] { "T1_Start_A", "T1_Start_B", "T1_Start_C" },
+            new[] { "T1_Mid_A", "T1_Mid_B", "T1_Mid_C" },
+            new[] { "T1_End_A", "T1_End_B", "T1_End_C" },
+        };
+
+        sealed class Group
+        {
+            public int G = int.MinValue;
+            public Transform T;
+            public MeshFilter L, R, F;
+            public string Ln, Rn;
+            public bool B;
         }
 
-        void Wall(int i, float x, float y, int variant)
+        readonly Transform corridor;
+        readonly Material sceneMat;
+        readonly Group[] groups = new Group[Groups];
+        Transform gate;
+        MeshFilter[] gatePieces;
+        Run sceneRun;
+        float bhRef;
+        int stripCols = -1;
+
+        void Scenery(Run r)
         {
-            if (i >= walls.Count)
+            const float C = Run.CELL;
+            if (r != sceneRun)
             {
-                MeshFilter mf;
-                walls.Add(MakeObject("wall", board, null, out mf));
+                sceneRun = r;
+                bhRef = r.L.Rows * C;
+                foreach (var gr in groups) if (gr != null) gr.G = int.MinValue;
             }
-            var go = walls[i];
-            if (!go.activeSelf) go.SetActive(true);
-            var mesh = wallMods[((variant % 8) + 8) % 8];
-            var f = go.GetComponent<MeshFilter>();
-            if (f.sharedMesh != mesh) f.sharedMesh = mesh;
-            go.transform.localPosition = new Vector3(x, y, 0);
+            float rows = r.Bh / C;
+            corridor.localPosition = new Vector3(r.Bw / 2 * K, -(bhRef / 2 + r.FloorShift) * K, 0);
+            corridor.localScale = new Vector3(K, K, K);
+            float kBase = (r.Bh / 2 - bhRef / 2 - r.FloorShift) / C;   // + 4G + 1.5 = group G's centre row, k up from the board centre
+            int cols = Mathf.Clamp(r.Expand != null ? r.Expand.ToCols : r.Cols, 7, 13) | 1;   // strips swap at the start of an expansion
+            bool restrip = cols != stripCols;
+            stripCols = cols;
+            float left = TurnsToFinal(r);
+
+            int gLow = Mathf.CeilToInt((-19 - kBase) / 4f);   // lowest group whose top row has not passed k −16
+            Group prev = null;
+            for (int n = 0; n < Groups; n++)
+            {
+                int G = gLow + n, slot = ((G % Groups) + Groups) % Groups;
+                var gr = groups[slot] ?? (groups[slot] = NewGroup());
+                if (gr.G != G) Draw(gr, G, r, kBase + 4 * G + 1.5f, rows, left, prev);
+                else if (restrip) Strip(gr, cols);
+                // walls follow the board edges every frame, so they slide out with an expansion (ASSEMBLY §4.4)
+                gr.L.transform.localPosition = new Vector3(-r.Bw / 2, 0, 0);
+                gr.R.transform.localPosition = new Vector3(r.Bw / 2, 0, 0);
+                bool vis = kBase + 4 * G < rows / 2 + 12;   // fully fogged beyond (ASSEMBLY §4.6)
+                if (gr.T.gameObject.activeSelf != vis) gr.T.gameObject.SetActive(vis);
+                prev = gr;
+            }
+
+            // the casting-pit gate: rides in with the corridor and docks 3 cells past the far row as the final boss comes
+            float kGate = rows / 2 + 3 + left;
+            bool showGate = kGate <= 20 && Models.Scenery("T1_Gate_Lintel") != null;
+            if (showGate && gate == null)
+            {
+                gate = new GameObject("Gate").transform;
+                gate.SetParent(corridor, false);
+                gatePieces = new[] { Piece("T1_Gate_Tower", gate), Piece("T1_Gate_Tower", gate), Piece("T1_Gate_Lintel", gate) };
+                foreach (var pc in gatePieces) pc.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            if (gate != null)
+            {
+                if (gate.gameObject.activeSelf != showGate) gate.gameObject.SetActive(showGate);
+                gate.localPosition = new Vector3(0, (kGate - kBase) * C, 0);
+                gatePieces[0].transform.localPosition = new Vector3(-(r.Bw / 2 + 1.2f), 0, 0);
+                gatePieces[1].transform.localPosition = new Vector3(r.Bw / 2 + 1.2f, 0, 0);
+                gatePieces[2].transform.localScale = new Vector3((r.Bw + 2.4f) / 17f, 1, 1);
+            }
+
+            // LIGHTING.md: fog follows the camera distance, the copper spot follows the board size
+            RenderSettings.fogStartDistance = Distance + 2 * K;
+            RenderSettings.fogEndDistance = Distance + 14 * K;
+            var centre = new Vector3(r.Bw / 2 * K, -r.Bh / 2 * K, 0);
+            var sp = centre + Kit(-(r.Bw / 2) - 0.5f, (rows / 2 + 3) * C, 6);
+            var aim = centre + Kit(r.Bw / 2, 0.15f * rows * C, 1.5f);
+            spot.transform.localPosition = sp;
+            spot.transform.localRotation = Quaternion.LookRotation(aim - sp, new Vector3(0, 0, -1));
+
+            // spec §4.4: the far wall is the farthest floor line on screen, deep in the fog
+            var top = ScreenToBoard(viewW / 2, 0);
+            r.FarY = top.x > -998 ? Mathf.Min(top.y, -C) : -6 * C;
+        }
+
+        /// <summary>Kit-frame offset (across, along the corridor, up) to the game's world frame.</summary>
+        static Vector3 Kit(float x, float along, float up) { return new Vector3(x * K, along * K, -up * K); }
+
+        /// <summary>Turns of corridor still to scroll before the final boss walks out and the scroll stops.</summary>
+        static float TurnsToFinal(Run r)
+        {
+            float tl = r.L.TurnLen;
+            if (r.Boss != null && r.Boss.BossDef.Final) return 0;
+            if (r.FinalStarted) return r.Expand != null ? Mathf.Max(0, r.Expand.Dur - r.Expand.T) / tl : 0;
+            return (r.TimeToFinal + 3) / tl;   // the board expansion (3 s) comes before the boss
+        }
+
+        Group NewGroup()
+        {
+            var gr = new Group();
+            gr.T = new GameObject("Group").transform;
+            gr.T.SetParent(corridor, false);
+            gr.L = Piece(null, gr.T); gr.L.transform.localRotation = Quaternion.Euler(0, 0, 90);    // inner face (−y) toward +x
+            gr.R = Piece(null, gr.T); gr.R.transform.localRotation = Quaternion.Euler(0, 0, -90);
+            gr.F = Piece(null, gr.T);
+            gr.F.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return gr;
+        }
+
+        MeshFilter Piece(string mesh, Transform parent)
+        {
+            MeshFilter mf;
+            var go = MakeObject(mesh ?? "piece", parent, mesh != null ? Models.Scenery(mesh) : null, out mf);
+            go.GetComponent<MeshRenderer>().sharedMaterial = sceneMat;
+            return mf;
+        }
+
+        /// <summary>ASSEMBLY §4.3: segments by run progress (the turn these rows reach the far row ÷ the final boss
+        /// turn, ±0.05 jitter), left ≠ right, no segment twice in a row on one side.</summary>
+        void Draw(Group gr, int G, Run r, float kc, float rows, float left, Group prev)
+        {
+            gr.G = G;
+            float finalTurn = r.Turn + left;
+            float p = finalTurn > 0 ? Mathf.Clamp01((r.Turn + (kc - rows / 2)) / finalTurn) : 1;
+            gr.Ln = Pick(r, p, G, 'L', null, prev != null && prev.G == G - 1 ? prev.Ln : null);
+            gr.Rn = Pick(r, p, G, 'R', gr.Ln, prev != null && prev.G == G - 1 ? prev.Rn : null);
+            gr.L.sharedMesh = Models.Scenery(gr.Ln);
+            gr.R.sharedMesh = Models.Scenery(gr.Rn);
+            gr.B = Hash((uint)r.Seed, (uint)G, 7) % 3 == 0;
+            Strip(gr, stripCols);
+            gr.T.localPosition = new Vector3(0, (4 * G + 1.5f) * Run.CELL, 0);
+        }
+
+        static void Strip(Group gr, int cols) { gr.F.sharedMesh = Models.Scenery("T1_FloorStrip_W" + cols + (gr.B ? "_B" : "_A")); }
+
+        static string Pick(Run r, float p, int G, char side, string notThis, string prevSide)
+        {
+            uint h = Hash((uint)r.Seed, (uint)G, side);
+            p += ((h % 1000) / 1000f - 0.5f) * 2 * 0.05f;
+            var names = Sets[p < 0.3f ? 0 : p < 0.7f ? 1 : 2];
+            int n = names.Length, i = (int)((h >> 10) % (uint)n);
+            for (int t = 0; t < n; t++)
+            {
+                if (names[i] != notThis && !(n >= 3 && names[i] == prevSide)) break;
+                i = (i + 1) % n;
+            }
+            return names[i];
+        }
+
+        static uint Hash(uint a, uint b, uint c)
+        {
+            unchecked
+            {
+                uint h = 2166136261;
+                h = (h ^ a) * 16777619; h = (h ^ b) * 16777619; h = (h ^ c) * 16777619;
+                return h;
+            }
         }
 
         // ------------------------------------------------------------ units
@@ -458,6 +618,10 @@ namespace Pit.Game
             {
                 MeshFilter mf;
                 v.Plates[i] = MakeObject("plate", v.Go.transform, Models.Plate(), out mf);
+                // a property block like every other unit renderer: a plate drawn through the SRP batcher next to the
+                // scenery (same shader, no block) left the corridor untextured and unfogged, i.e. white
+                var pb = new MaterialPropertyBlock(); pb.SetFloat("_Flash", 0);
+                v.Plates[i].GetComponent<MeshRenderer>().SetPropertyBlock(pb);
                 v.Plates[i].SetActive(false);
             }
             return v;

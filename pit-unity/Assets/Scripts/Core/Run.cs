@@ -27,6 +27,12 @@ namespace Pit.Core
         public float Ddm = 1;
         public int BossesPassed;
         public bool FinalStarted;
+        // spec §1.3a treadmill corridor: Scroll counts cells the floor has moved toward the player (1 per turn length at
+        // ScrollSpeed 1), FloorShift is the same in board units plus the board expansions' shifts, so the view can
+        // keep the corridor under the units. FarY is the invisible far wall (spec §4.4) the balls bounce on: the
+        // farthest floor line the camera shows, set by the view each frame (board y, above the board's far row).
+        public float Scroll, ScrollSpeed = 1, FloorShift;
+        public float FarY = -6 * CELL;
         public Expansion Expand;
         public Enemy Boss;
 
@@ -198,6 +204,20 @@ namespace Pit.Core
             if (Banner != null) { Banner.T -= dt; if (Banner.T <= 0) Banner = null; }
         }
 
+        // ------------------------------------------------------------ corridor scroll (spec §1.3a)
+        void StepScroll(float dt)
+        {
+            if (Boss != null && Boss.BossDef.Final) ScrollSpeed = 0;   // the corridor ends: the final boss walks out of it
+            else if (Mode == Mode.Dying || Mode == Mode.Clearing) ScrollSpeed = M.Max(0, ScrollSpeed - dt);
+            float d = ScrollSpeed * dt / L.TurnLen;
+            if (d <= 0) return;
+            Scroll += d;
+            FloorShift += d * CELL;
+            // pickups lie on the floor and ride it; ones that slide 2 units past the bottom are gone
+            foreach (var o in Drops) if (!o.Flying) o.Y += d * CELL;
+            Drops.RemoveAll(o => !o.Flying && o.Y > Bh + 2);
+        }
+
         // ------------------------------------------------------------ main step
         public bool IsMenu { get { return Mode == Mode.LevelUp || Mode == Mode.Fuser || Mode == Mode.Paused; } }
         public bool IsOver { get { return Mode == Mode.GameOver || Mode == Mode.Victory; } }
@@ -210,6 +230,7 @@ namespace Pit.Core
             if (m == Mode.Intro)
             {
                 IntroT -= dt;
+                StepScroll(dt);
                 StepPlayer(dt);
                 if (IntroT <= 0) { Mode = Mode.Playing; SpawnTick(); }
                 StepFx(dt);
@@ -253,6 +274,7 @@ namespace Pit.Core
             if (m == Mode.Playing || m == Mode.Dying) { StepEnemies(dt); StepShots(dt); }
             if (deferred.Count > 0) { Enemies.AddRange(deferred); deferred.Clear(); }
             Enemies.RemoveAll(e => e.Dead);
+            StepScroll(dt);
             StepDrops(dt);
             StepFx(dt);
             if (Mode == Mode.Playing && Expand == null) CheckMenus();

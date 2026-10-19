@@ -115,7 +115,7 @@ namespace UnityEngine
     public class Material : Object
     {
         public Material(Shader s) { }
-        public Texture mainTexture; public void SetTexture(string n, Texture t) { } public void SetFloat(string n, float v) { }
+        public Texture mainTexture; public bool enableInstancing; public void SetTexture(string n, Texture t) { } public void SetFloat(string n, float v) { }
     }
     public sealed class MaterialPropertyBlock { public void SetFloat(string n, float v) { } public void SetColor(string n, Color c) { } }
     public enum TextureFormat { RGBA32 = 4 }
@@ -237,7 +237,7 @@ namespace UnityEngine
     }
     public enum LightType { Spot, Directional, Point }
     public enum LightShadows { None, Hard, Soft }
-    public sealed class Light : Behaviour { public LightType type; public Color color; public float intensity, shadowStrength; public LightShadows shadows; }
+    public sealed class Light : Behaviour { public LightType type; public Color color; public float intensity, shadowStrength, range, spotAngle, innerSpotAngle; public LightShadows shadows; }
     public enum FogMode { Linear = 1, Exponential, ExponentialSquared }
     public static class RenderSettings
     {

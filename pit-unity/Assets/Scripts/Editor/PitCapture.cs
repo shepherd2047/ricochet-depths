@@ -94,7 +94,7 @@ namespace Pit.EditorTools
                 System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path)));
                 System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
                 Debug.Log("PitCapture: " + path + " hero " + heroId + " turn " + r.Turn + " board " + r.Cols + "x" + r.Rows +
-                          " foes " + r.Enemies.Count + " distance " + board.Distance.ToString("0.00"));
+                          " foes " + r.Enemies.Count + " distance " + board.Distance.ToString("0.00") + " farY " + r.FarY.ToString("0.00") + " scroll " + r.Scroll.ToString("0.0"));
             }
             catch (Exception ex)
             {

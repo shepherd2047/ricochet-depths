@@ -227,8 +227,8 @@ namespace Pit.Core
                 // side walls
                 if (b.X < b.R) { b.X = b.R; b.Vx = M.Abs(b.Vx); WallHit(b, false); }
                 else if (b.X > Bw - b.R) { b.X = Bw - b.R; b.Vx = -M.Abs(b.Vx); WallHit(b, false); }
-                // top wall
-                if (b.Y < b.R) { b.Y = b.R; b.Vy = M.Abs(b.Vy); WallHit(b, true); if (b.Recall) break; }
+                // the far wall: invisible, in the fog at the corridor's farthest visible line (spec §4.4)
+                if (b.Y < FarY + b.R) { b.Y = FarY + b.R; b.Vy = M.Abs(b.Vy); WallHit(b, true); if (b.Recall) break; }
                 // out of the bottom: side balls simply vanish, others turn back to the shooter
                 if (b.Y > Bh + b.R) { if (b.Temp) b.Gone = true; else b.Recall = true; break; }
                 // catch box (paddle heroes swat instead)
