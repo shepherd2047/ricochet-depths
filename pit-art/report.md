@@ -97,6 +97,32 @@ Clean room: I read only `ballpit-spec/style.md` and `ballpit-spec/spec.md` (arch
 - Not checked: import into Unity and Humanoid avatar validation. The launcher is a fork held upright in the hand; it isn't aimed down the arm.
 - Enemies aren't animated yet. art-bible §6 says baked vertex animation at 8–12 fps.
 
+## Enemies rigged and animated (2026-10-19)
+
+- `monster_lib.py` now has a rig and clip toolkit:
+  - `finish()` keeps each part's name as a vertex group.
+  - `make_rig()` binds each part 100 % to one bone (rigid skin).
+  - `add_clip()` keys poses about world axes, including squash/stretch scale. It writes keys every 2 frames at 24 fps with constant interpolation, which gives the 12 poses/s that style.md §6 asks for.
+  - `export_rigged()` writes `models/rigged/enemy_<key>.fbx` (Unity: Rig = Generic) and `.glb`.
+  - `render_clips()` and `tools/make_gifs.py` produce the previews.
+- Each monster script appends its rig behind `MONSTER_RIG=1` (frame renders behind `MONSTER_CLIPS=<dir>`); a plain run still builds only the static model. One agent animated each monster.
+
+| Enemy | Bones | Idle | Move | Attack | Hit | Death |
+|---|---|---|---|---|---|---|
+| Shambler | Root, Body, Face, Crust, LegL, LegR | 40 loop | 16 loop (stomp) | 16 (lunge-slam) | 10 | 20 (crust pops off, flattens) |
+| Brute | Root, Body, Visor, Bumps, LegL, LegR | 44 loop | 20 loop (heavy stomp) | 20 (rear-up headbutt) | 10 (barely budges) | 24 (visor drops, topples forward) |
+| Spitter | Root, Body, Flue, Drip, LegL, LegR | 40 loop (flue puff) | 16 loop (waddle) | 16, **projectile release on frame 8** at the flue mouth | 10 | 20 (flue falls off to +X) |
+
+- Frame counts are at 24 fps. Verts are unchanged (392 / 374 / 396).
+- Previews are in `models/rigged/preview/` (`enemy_<key>_<clip>.gif`, `_all.gif`, and the key-frame sheet `_enemy_keys.png`).
+- Known issues:
+  - From the high camera the legs are mostly hidden, so Move reads through the body roll, bob and squash.
+  - Brute's Death drifts 0.3–0.4 m forward.
+  - Spitter's Death flue lands about 0.45 m to the side, slightly outside the tile.
+  - Death clips animate scale on Root/Body, so the engine must play the full hierarchy.
+  - Not imported into Unity yet.
+- Hero on-board size: per the user, the hero must fill at least one cell. The rule is in art-bible §4 (draw 1.35 cells tall, scaled by height). The Unity session was asked to change Board3D.Hero.
+
 ## Next
 
 1. Done: the 7 remaining concepts are generated (13 Figma AI calls in total). Mender's wax is lighter than the enemy value range; decimate.py's `--vrange` pulls it down.

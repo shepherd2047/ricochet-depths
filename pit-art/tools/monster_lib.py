@@ -21,7 +21,7 @@ import sys
 import bmesh
 import bpy
 import numpy as np
-from mathutils import Euler, Matrix, Vector
+from mathutils import Euler, Matrix, Quaternion, Vector
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # pit-art/
 OUT_DIR = os.path.join(ROOT, "models", "lowpoly")
@@ -324,6 +324,8 @@ def finish(key, preview=True, budget=400):
     bpy.ops.object.select_all(action="DESELECT")
     for o in _PARTS:
         o.select_set(True)
+        vg = o.vertex_groups.new(name="part:" + o.name)  # survives the join; used by make_rig()
+        vg.add(list(range(len(o.data.vertices))), 1.0, "REPLACE")
     bpy.context.view_layer.objects.active = _PARTS[0]
     if len(_PARTS) > 1:
         bpy.ops.object.join()
@@ -396,6 +398,170 @@ def render_preview(obj, path):
     sc.render.filepath = path
     bpy.ops.render.render(write_still=True)
     print("[monster] preview", path)
+
+
+# ------------------------------------------------------------------------------- rig + clips
+RIG_DIR = os.path.join(ROOT, "models", "rigged")
+CLIP_FPS = 24          # scene rate; keys every KEY_STEP frames with constant interpolation
+KEY_STEP = 2           # → 12 poses per second, the chunky 8–12 fps look of style.md §6
+WX, WY, WZ = (1, 0, 0), (0, 1, 0), (0, 0, 1)
+
+
+def part_names(obj):
+    """Names of the parts inside a finished monster (from finish())."""
+    return [g.name[5:] for g in obj.vertex_groups if g.name.startswith("part:")]
+
+
+def part_bounds(obj, *parts):
+    """(min Vector, max Vector) of the given parts' verts after finish() (feet at z=0)."""
+    idx = {obj.vertex_groups["part:" + p].index for p in parts}
+    ps = [v.co for v in obj.data.vertices if any(g.group in idx for g in v.groups)]
+    lo = Vector((min(p.x for p in ps), min(p.y for p in ps), min(p.z for p in ps)))
+    hi = Vector((max(p.x for p in ps), max(p.y for p in ps), max(p.z for p in ps)))
+    return lo, hi
+
+
+def make_rig(obj, bones, assign):
+    """Rigid skin: every part follows exactly one bone (low-poly creatures built from parts).
+
+    bones:  [(name, head xyz, tail xyz, parent or None), ...]  — the first bone should be "Root" at the
+            feet so whole-body moves/turns are clean; armature space = the finished mesh's space.
+    assign: {part name: bone name}; parts not listed go to the second bone (usually "Body").
+    """
+    arm = bpy.data.armatures.new(obj.name + "_Armature")
+    rig = bpy.data.objects.new(obj.name + "_Rig", arm)
+    bpy.context.scene.collection.objects.link(rig)
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode="EDIT")
+    for name, head, tail, parent in bones:
+        b = arm.edit_bones.new(name)
+        b.head, b.tail = Vector(head), Vector(tail)
+        if parent:
+            b.parent = arm.edit_bones[parent]
+        b.align_roll(Vector((0, -1, 0)))
+    bpy.ops.object.mode_set(mode="OBJECT")
+    default = bones[1][0] if len(bones) > 1 else bones[0][0]
+    bone_vg = {name: obj.vertex_groups.new(name=name) for name, *_ in bones}
+    for pname in part_names(obj):
+        g = obj.vertex_groups["part:" + pname]
+        verts = [v.index for v in obj.data.vertices if any(x.group == g.index for x in v.groups)]
+        bone_vg[assign.get(pname, default)].add(verts, 1.0, "REPLACE")
+    for g in [g for g in obj.vertex_groups if g.name.startswith("part:")]:
+        obj.vertex_groups.remove(g)
+    obj.parent = rig
+    mod = obj.modifiers.new("Armature", "ARMATURE")
+    mod.object = rig
+    rig.animation_data_create()
+    for pb in rig.pose.bones:
+        pb.rotation_mode = "QUATERNION"
+    return rig
+
+
+def add_clip(rig, name, length, pose_fn, loop=True):
+    """Key a clip. pose_fn(t) with t in [0, 1) (loop) or [0, 1] (one-shot) returns
+    {bone: {"rot": [(world_axis, deg), ...], "loc": (dx, dy, dz) metres, "scale": (sx, sy, sz)}}.
+    Rotations are about world axes through the bone's head (applied in list order).
+    Sign rule: +deg about X tips an upward bone forward (toward −Y, the facing direction);
+    +deg about Z turns the creature to its left (counter-clockwise seen from above).
+    Keys every KEY_STEP frames with CONSTANT interpolation; length in scene frames at CLIP_FPS."""
+    act = bpy.data.actions.new(name)
+    rig.animation_data.action = act
+    frames = list(range(0, length + (0 if loop else 1), KEY_STEP))
+    if not loop and frames[-1] != length:
+        frames.append(length)
+    for f in frames:
+        t = f / length
+        pose = pose_fn(t)
+        for pb in rig.pose.bones:
+            spec = pose.get(pb.name, {})
+            m = pb.bone.matrix_local.to_3x3()
+            q = Quaternion()
+            for ax, deg in spec.get("rot", []):
+                q = (m.inverted() @ Quaternion(Vector(ax), math.radians(deg)).to_matrix() @ m).to_quaternion() @ q
+            pb.rotation_quaternion = q
+            pb.location = m.inverted() @ Vector(spec.get("loc", (0, 0, 0)))
+            sx, sy, sz = spec.get("scale", (1, 1, 1))
+            pb.scale = (sx, sz, sy)  # bone Y is the bone's length axis (world Z for upward bones)
+            for path in ("rotation_quaternion", "location", "scale"):
+                pb.keyframe_insert(path, frame=f)
+    for fc in _fcurves(act):
+        for kp in fc.keyframe_points:
+            kp.interpolation = "CONSTANT"
+    act.use_fake_user = True
+    tr = rig.animation_data.nla_tracks.new()
+    tr.name = name
+    tr.strips.new(name, 0, act)
+    rig.animation_data.action = None
+    return act
+
+
+def _fcurves(act):
+    if hasattr(act, "fcurves") and len(getattr(act, "fcurves", [])):
+        return list(act.fcurves)
+    out = []  # Blender 5 layered actions
+    for layer in getattr(act, "layers", []):
+        for strip in layer.strips:
+            for bag in strip.channelbags:
+                out += list(bag.fcurves)
+    return out
+
+
+def export_rigged(obj, rig, key):
+    """models/rigged/enemy_<key>.fbx (Unity: Rig = Generic) + .glb with every clip."""
+    os.makedirs(RIG_DIR, exist_ok=True)
+    bpy.context.scene.render.fps = CLIP_FPS
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    rig.select_set(True)
+    bpy.context.view_layer.objects.active = rig
+    out = os.path.join(RIG_DIR, f"enemy_{key}")
+    bpy.ops.export_scene.fbx(
+        filepath=out + ".fbx", use_selection=True, object_types={"MESH", "ARMATURE"},
+        apply_scale_options="FBX_SCALE_ALL", axis_forward="-Z", axis_up="Y", add_leaf_bones=False,
+        path_mode="COPY", embed_textures=True, mesh_smooth_type="FACE",
+        bake_anim=True, bake_anim_use_all_actions=False, bake_anim_use_nla_strips=True,
+        bake_anim_force_startend_keying=True, bake_anim_simplify_factor=0.0, bake_anim_step=1.0,
+    )
+    bpy.ops.export_scene.gltf(
+        filepath=out + ".glb", export_format="GLB", use_selection=True, export_skins=True,
+        export_animations=True, export_animation_mode="NLA_TRACKS", export_materials="EXPORT",
+    )
+    print(f"[monster] rigged {key}: {len(rig.data.bones)} bones, clips "
+          f"{[t.name for t in rig.animation_data.nla_tracks]} -> {out}.fbx/.glb")
+
+
+def render_clips(rig, folder, res=256, cam_loc=(1.6, -2.6, 1.6), target_z=0.4, ortho=1.6):
+    """Every clip frame by frame into folder/<clip>/NNN.png (high 3/4 view like the game camera).
+    Turn them into GIFs with tools/make_gifs.py."""
+    sc = _setup_render(res, res)
+    sc.render.fps = CLIP_FPS
+    cam = bpy.data.objects.new("ClipCam", bpy.data.cameras.new("ClipCam"))
+    cam.data.type = "ORTHO"
+    cam.data.ortho_scale = ortho
+    sc.collection.objects.link(cam)
+    cam.location = cam_loc
+    tgt = bpy.data.objects.new("ClipT", None)
+    sc.collection.objects.link(tgt)
+    tgt.location = (0, 0, target_z)
+    con = cam.constraints.new("TRACK_TO")
+    con.target = tgt
+    sc.camera = cam
+    for tr in rig.animation_data.nla_tracks:
+        tr.mute = True
+    for tr in rig.animation_data.nla_tracks:
+        act = bpy.data.actions[tr.name]
+        rig.animation_data.action = act
+        lo, hi = (int(x) for x in act.frame_range)
+        os.makedirs(os.path.join(folder, tr.name), exist_ok=True)
+        for f in range(lo, hi + 1):
+            sc.frame_set(f)
+            sc.render.filepath = os.path.join(folder, tr.name, f"{f:03d}.png")
+            bpy.ops.render.render(write_still=True)
+    rig.animation_data.action = None
+    for tr in rig.animation_data.nla_tracks:
+        tr.mute = False
+    print("[monster] clip frames in", folder)
 
 
 if __name__ == "__main__":

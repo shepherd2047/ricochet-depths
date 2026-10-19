@@ -131,3 +131,162 @@ def extra_views(obj, out_dir):
 
 if os.environ.get("BRUTE_VIEWS"):
     extra_views(obj, os.environ["BRUTE_VIEWS"])
+
+
+# ------------------------------------------------------------------------------ rig + clips
+# MONSTER_RIG=1 → rig + Idle/Move/Attack/Hit/Death, export models/rigged/enemy_brute.fbx/.glb;
+# MONSTER_CLIPS=<dir> also renders every clip frame for tools/make_gifs.py.
+def _ease(x):
+    x = min(max(x, 0.0), 1.0)
+    return x * x * (3 - 2 * x)
+
+
+def _seg(t, a, b):
+    """0 before a, eased 0→1 over [a, b], 1 after."""
+    return _ease((t - a) / (b - a)) if b > a else float(t >= b)
+
+
+def _sq(s):
+    """Volume-preserving squash: s = vertical scale → (sx, sy, sz)."""
+    w = 1.0 / math.sqrt(s)
+    return (w, w, s)
+
+
+def _pivot_x(deg, pivot, head=(0, 0, 0.16)):
+    """loc that makes a rotation of deg about world X at the bone head look like it turns about pivot (y, z)."""
+    a = math.radians(deg)
+    vy, vz = pivot[0] - head[1], pivot[1] - head[2]
+    ry, rz = vy * math.cos(a) - vz * math.sin(a), vy * math.sin(a) + vz * math.cos(a)
+    return (0.0, vy - ry, vz - rz)
+
+
+def build_rig(obj):
+    lo, hi = ml.part_bounds(obj, "leg_l")
+    hip = hi.z
+    vlo, vhi = ml.part_bounds(obj, "plate", "socket", "eye")
+    blo, bhi = ml.part_bounds(obj, "bump_l", "bump_r")
+    bones = [
+        ("Root", (0, 0, 0), (0, 0, 0.2), None),
+        ("Body", (0, 0, 0.16), (0, 0, 0.78), "Root"),
+        ("Visor", (0, vhi.y, vlo.z), (0, vhi.y, vhi.z + 0.08), "Body"),
+        ("Bumps", (0, 0.04, blo.z), (0, 0.04, bhi.z), "Body"),
+        ("LegL", (-0.21, 0.03, hip), (-0.21, 0.03, 0.0), "Root"),
+        ("LegR", (0.21, 0.03, hip), (0.21, 0.03, 0.0), "Root"),
+    ]
+    assign = {"body": "Body", "collar": "Body", "plate": "Visor", "socket": "Visor", "eye": "Visor",
+              "bump_l": "Bumps", "bump_r": "Bumps", "leg_l": "LegL", "foot_l": "LegL",
+              "leg_r": "LegR", "foot_r": "LegR"}
+    return ml.make_rig(obj, bones, assign)
+
+
+X, Y, Z = ml.WX, ml.WY, ml.WZ
+
+
+def idle(t):
+    # two-beat heavy breath: inhale (rise + slight stretch), exhale settle with a visor clank
+    b = 0.5 - 0.5 * math.cos(2 * math.pi * t)          # 0 → 1 → 0
+    s = 1.0 + 0.05 * b - 0.02 * (1 - b)
+    clank = 0.012 if 0.55 <= t < 0.65 else 0.0
+    return {
+        "Body": {"scale": _sq(s), "loc": (0, 0, 0.018 * b), "rot": [(X, -3.0 * b)]},
+        "Visor": {"loc": (0, 0, 0.018 * b - clank), "rot": [(X, -4.0 * b + (3.0 if clank else 0))]},
+        "Bumps": {"loc": (0, 0, 0.01 * b)},
+    }
+
+
+def move(t):
+    # two stomps per loop: L lifts in [0, .35], lands at .35-.5; R the same half a loop later
+    out = {}
+    body_x = 0.0
+    land = 0.0
+    lift_amt = {}
+    for leg, off, side in (("LegL", 0.0, -1), ("LegR", 0.5, 1)):
+        p = (t - off) % 1.0
+        if p < 0.4:
+            u = p / 0.4
+            # slow heave up to u 0.7, then a fast slam down (on the floor again at p 0.34)
+            lift = math.sin(0.5 * math.pi * u / 0.7) if u < 0.7 else max(0.0, 1.0 - (u - 0.7) / 0.15)
+        else:
+            lift = 0.0
+        lift_amt[leg] = lift
+        swing = 28.0 * lift * (1 if p < 0.2 else 0.4)          # foot swings forward while lifting
+        out[leg] = {"loc": (0, -0.08 * lift, 0.21 * lift), "rot": [(X, -swing)]}
+        if 0.34 <= p < 0.5:
+            land = max(land, 1.0 - (p - 0.34) / 0.16)
+        # weight shifts over the planted leg (opposite side of the lifted one)
+        body_x += -side * 0.07 * math.sin(math.pi * min(p / 0.4, 1.0)) if p < 0.4 else 0.0
+    roll = body_x / 0.07 * 9.0
+    s = 1.0 - 0.13 * land + 0.04 * max(lift_amt.values())
+    out["Body"] = {"scale": _sq(s), "loc": (body_x, 0, -0.04 * land + 0.05 * max(lift_amt.values())),
+                   "rot": [(Y, -roll), (X, 5.0)]}
+    out["Visor"] = {"loc": (0, 0, -0.02 * land)}
+    out["Bumps"] = {"loc": (0, 0, -0.025 * land), "scale": _sq(1.0 - 0.1 * land)}
+    return out
+
+
+def attack(t):
+    wind = _seg(t, 0.0, 0.40)          # rear back + lift
+    slam = _seg(t, 0.40, 0.52)         # snap forward
+    hold = 1.0 if 0.52 <= t < 0.72 else 0.0
+    rec = _seg(t, 0.72, 1.0)
+    lean = -20.0 * wind * (1 - slam) + 30.0 * slam * (1 - rec)
+    up = 0.08 * wind * (1 - slam)
+    fwd = -0.12 * slam * (1 - rec)
+    s = 1.0 + 0.10 * wind * (1 - slam) - 0.16 * slam * (1 - rec) * (1.0 if t < 0.62 else 0.6)
+    vis = -8.0 * wind * (1 - slam) + 10.0 * slam * (1 - rec) * (1 if t < 0.6 else 0.5)
+    leg_back = 8.0 * wind * (1 - slam)
+    pv = _pivot_x(lean, (-0.36, 0.2) if lean > 0 else (0.34, 0.2))
+    return {
+        "Body": {"rot": [(X, lean)], "loc": (0, fwd + pv[1], up - 0.03 * slam * (1 - rec) + pv[2]),
+                 "scale": _sq(s)},
+        "Visor": {"rot": [(X, vis)], "loc": (0, 0, 0.03 * wind * (1 - slam))},
+        "Bumps": {"scale": _sq(1.0 - 0.12 * slam * (1 - rec) + 0.05 * wind * (1 - slam))},
+        "LegL": {"rot": [(X, -leg_back)], "loc": (0, 0, 0.03 * wind * (1 - slam))},
+        "LegR": {"rot": [(X, -leg_back)], "loc": (0, 0, 0.03 * wind * (1 - slam))},
+    }
+
+
+def hit(t):
+    k = 1.0 - _seg(t, 0.15, 1.0) if t >= 0.15 else t / 0.15
+    rattle = [0, 4, -3, 2, -1, 0][min(int(t * 6), 5)]
+    return {
+        "Body": {"rot": [(X, -6.0 * k)], "loc": (0, 0.03 * k, 0), "scale": _sq(1.0 - 0.04 * k)},
+        "Visor": {"rot": [(X, rattle * 1.5)], "loc": (0.008 * rattle / 4, 0, 0)},
+    }
+
+
+def death(t):
+    pop = _seg(t, 0.0, 0.15)            # visor knocked loose
+    fall = _seg(t, 0.15, 0.40)          # visor falls to the floor
+    sag = _seg(t, 0.05, 0.35)           # body sags
+    top = _seg(t, 0.30, 0.62)           # topples forward
+    sink = _seg(t, 0.60, 1.0)           # crumbles into the ground
+    s = 1.0 - 0.12 * sag
+    sx, sy, sz = _sq(s)
+    k = 1.0 - 0.7 * sink              # shrink toward the floor contact point
+    ang = 48.0 * top
+    pv = _pivot_x(ang, (-0.40, 0.16 - 0.06 * sag))
+    return {
+        "Body": {"rot": [(X, ang)],
+                 "loc": (0, pv[1] * k, pv[2] - 0.05 * sag - 0.30 * sink),
+                 "scale": (sx * k, sy * k, sz * k * (1 - 0.35 * sink))},
+        "Visor": {"rot": [(X, -25.0 * pop - 50.0 * fall)],
+                  "loc": (0, -0.12 * pop - 0.12 * fall, 0.06 * pop * (1 - fall) - 0.58 * fall)},
+        "Bumps": {"scale": _sq(1.0 - 0.3 * sink)},
+        "LegL": {"rot": [(Y, 14.0 * sag), (X, -20.0 * top)], "scale": (k, k, k * (1 - 0.5 * sink)),
+                 "loc": (0.1 * sink, -0.18 * top, -0.2 * sink)},
+        "LegR": {"rot": [(Y, -14.0 * sag), (X, -20.0 * top)], "scale": (k, k, k * (1 - 0.5 * sink)),
+                 "loc": (-0.1 * sink, -0.18 * top, -0.2 * sink)},
+    }
+
+
+if os.environ.get("MONSTER_RIG"):
+    rig = build_rig(obj)
+    ml.add_clip(rig, "Idle", 44, idle, loop=True)
+    ml.add_clip(rig, "Move", 20, move, loop=True)
+    ml.add_clip(rig, "Attack", 20, attack, loop=False)
+    ml.add_clip(rig, "Hit", 10, hit, loop=False)
+    ml.add_clip(rig, "Death", 24, death, loop=False)
+    ml.export_rigged(obj, rig, "brute")
+    if os.environ.get("MONSTER_CLIPS"):
+        ml.render_clips(rig, os.environ["MONSTER_CLIPS"], ortho=2.0)

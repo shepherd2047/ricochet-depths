@@ -113,3 +113,165 @@ if views:
         sc.render.filepath = os.path.join(views, f"shambler_{vname}.png")
         bpy.ops.render.render(write_still=True)
         print("[monster] view", sc.render.filepath)
+
+
+# --- rig + clips (MONSTER_RIG=1; MONSTER_CLIPS=<dir> also renders every clip frame) ----------------
+def _ease(x):
+    x = min(1.0, max(0.0, x))
+    return x * x * (3 - 2 * x)
+
+
+def _track(t, keys):
+    """keys [(t, value or tuple), ...] sorted by t → eased value at t (held outside the range)."""
+    if t <= keys[0][0]:
+        return keys[0][1]
+    for (t0, v0), (t1, v1) in zip(keys, keys[1:]):
+        if t <= t1:
+            u = _ease((t - t0) / (t1 - t0))
+            if isinstance(v0, tuple):
+                return tuple(a + (b - a) * u for a, b in zip(v0, v1))
+            return v0 + (v1 - v0) * u
+    return keys[-1][1]
+
+
+def _leg(deg, lift=0.0):
+    """Leg swing about the hip + the rise that keeps the block's lowest corner on the floor."""
+    a = math.radians(abs(deg))
+    rise = 0.22 * math.cos(a) + 0.105 * math.sin(a) - 0.22
+    return {"rot": [(ml.WX, deg)], "loc": (0, 0, max(0.0, rise) + lift)}
+
+
+def _sq(z):
+    """Volume-keeping squash/stretch: z scale → (x, y, z)."""
+    xy = 1.0 / math.sqrt(z)
+    return (xy, xy, z)
+
+
+def _floor_check(obj, rig):
+    """Print each clip's lowest vertex z (should stay ~0: nothing sinks under the floor)."""
+    sc = bpy.context.scene
+    dg = bpy.context.evaluated_depsgraph_get()
+    for tr in rig.animation_data.nla_tracks:
+        tr.mute = True
+    for tr in rig.animation_data.nla_tracks:
+        rig.animation_data.action = bpy.data.actions[tr.name]
+        lo, hi = (int(x) for x in rig.animation_data.action.frame_range)
+        worst = []
+        for f in range(lo, hi + 1, ml.KEY_STEP):
+            sc.frame_set(f)
+            me = obj.evaluated_get(dg).to_mesh()
+            worst.append(round(min((obj.matrix_world @ v.co).z for v in me.vertices), 3))
+            obj.evaluated_get(dg).to_mesh_clear()
+        print(f"[monster] floor {tr.name}: min z per pose {worst}")
+    rig.animation_data.action = None
+    for tr in rig.animation_data.nla_tracks:
+        tr.mute = False
+
+
+if os.environ.get("MONSTER_RIG"):
+    print("[monster] parts", ml.part_names(obj))
+    for p in ("body", "leg_l", "eye_l", "brow_l", "crust_top"):
+        lo, hi = ml.part_bounds(obj, p)
+        print(f"[monster] {p}: {tuple(round(v, 3) for v in lo)} .. {tuple(round(v, 3) for v in hi)}")
+    HIP = 0.22
+    bones = [
+        ("Root", (0, 0, 0), (0, 0.15, 0), None),
+        ("Body", (0, 0, HIP), (0, 0, 0.86), "Root"),
+        ("LegL", (-0.15, 0, HIP), (-0.15, 0, 0.0), "Root"),
+        ("LegR", (0.15, 0, HIP), (0.15, 0, 0.0), "Root"),
+        ("Face", (0, -0.33, 0.47), (0, -0.33, 0.6), "Body"),
+        ("Crust", (0, 0, 0.6), (0, 0, 0.86), "Body"),
+    ]
+    assign = {"leg_l": "LegL", "leg_l_r": "LegR"}
+    for p in ml.part_names(obj):
+        if p.startswith(("eye", "brow")):
+            assign[p] = "Face"
+        elif p.startswith("crust"):
+            assign[p] = "Crust"
+    rig = ml.make_rig(obj, bones, assign)
+    TAU = 2 * math.pi
+
+    def idle(t):
+        s = math.sin(TAU * t)
+        z = 1 + 0.06 * s
+        return {
+            "Body": {"scale": _sq(z), "rot": [(ml.WY, 2.0 * math.sin(TAU * t + 0.8)), (ml.WX, 1.5 + 1.5 * s)]},
+            "Face": {"loc": (0, 0, -0.012 * math.sin(TAU * t - 0.9)),
+                     "rot": [(ml.WX, 3 * math.sin(TAU * t - 0.9))]},
+            "Crust": {"loc": (0, 0, 0.01 * math.sin(TAU * t - 1.3))},
+        }
+
+    def move(t):
+        p = TAU * t
+        fl, fr = math.sin(p), -math.sin(p)              # + = leg forward
+        ll, lr = max(0.0, math.cos(p)), max(0.0, -math.cos(p))  # lift while swinging forward
+        plant = math.sin(p) ** 2                         # 1 at each foot plant
+        z = 1 - 0.08 * plant                             # squash on each plant, stretch while passing
+        return {
+            "Body": {"scale": _sq(z), "loc": (0, 0, 0.03 * (1 - plant) - 0.012),
+                     "rot": [(ml.WX, 5), (ml.WY, -7 * math.cos(p)), (ml.WZ, -6 * math.sin(p))]},
+            "LegL": _leg(-26 * fl, 0.04 * ll),
+            "LegR": _leg(-26 * fr, 0.04 * lr),
+            "Face": {"loc": (0, 0, -0.012 * plant)},
+            "Crust": {"loc": (0, 0, 0.018 * plant)},
+        }
+
+    def attack(t):
+        lean = _track(t, [(0, 0), (0.35, -16), (0.5, 32), (0.68, 30), (1, 0)])
+        z = _track(t, [(0, 1), (0.35, 0.82), (0.5, 1.16), (0.6, 0.9), (0.75, 0.96), (1, 1)])
+        dy = _track(t, [(0, 0), (0.35, 0.05), (0.5, -0.14), (0.7, -0.12), (1, 0)])
+        dz = _track(t, [(0, 0), (0.35, -0.03), (0.5, 0.02), (0.6, -0.03), (1, 0)])
+        legs = _track(t, [(0, 0), (0.35, -8), (0.5, 18), (0.7, 14), (1, 0)])  # + = swing back (push)
+        brow = _track(t, [(0, 0), (0.3, -0.03), (0.5, 0.0), (1, 0)])
+        crust = _track(t, [(0, 0), (0.5, 0), (0.58, 0.05), (0.7, 0), (1, 0)])
+        return {
+            "Body": {"scale": _sq(z), "loc": (0, dy, dz), "rot": [(ml.WX, lean)]},
+            "LegL": _leg(legs),
+            "LegR": _leg(legs * 0.6),
+            "Face": {"loc": (0, 0, brow), "scale": _sq(1 + brow * 3)},
+            "Crust": {"loc": (0, 0, crust)},
+        }
+
+    def hit(t):
+        lean = _track(t, [(0, 0), (0.2, -18), (0.45, 8), (0.7, -4), (1, 0)])
+        z = _track(t, [(0, 1), (0.2, 0.8), (0.45, 1.08), (0.7, 0.97), (1, 1)])
+        dy = _track(t, [(0, 0), (0.2, 0.07), (0.6, 0.01), (1, 0)])
+        crust = _track(t, [(0, 0), (0.2, 0.04), (0.45, -0.01), (1, 0)])
+        return {
+            "Body": {"scale": _sq(z), "loc": (0, dy, 0), "rot": [(ml.WX, lean), (ml.WY, lean * 0.3)]},
+            "Face": {"loc": (0, 0, _track(t, [(0, 0), (0.2, 0.02), (0.5, 0), (1, 0)]))},
+            "Crust": {"loc": (0, 0, crust)},
+        }
+
+    def death(t):
+        lean = _track(t, [(0, 0), (0.15, -14), (0.3, 6), (0.6, 30), (1, 8)])
+        roll = _track(t, [(0, 0), (0.15, 8), (0.3, -10), (0.6, -14), (1, -5)])
+        z = _track(t, [(0, 1), (0.15, 0.88), (0.3, 1.05), (0.6, 0.6), (0.85, 0.36), (1, 0.34)])
+        sink = _track(t, [(0, 0), (0.3, 0), (0.6, 0.06), (1, -0.02)])
+        shrink = _track(t, [(0, 1), (0.5, 1), (1, 0.5)])
+        legs = _track(t, [(0, 0), (0.15, -10), (0.3, 6), (0.65, 0), (1, 0)])
+        pop = _track(t, [(0, 0), (0.3, 0), (0.45, 0.16), (0.65, 0.05), (1, -0.02)])
+        crust_s = _track(t, [(0, 1), (0.45, 1.15), (0.75, 0.5), (1, 0.3)])
+        face = _track(t, [(0, 1), (0.6, 1), (0.85, 0.2), (1, 0.05)])
+        xy = 1 / math.sqrt(z)
+        return {
+            "Root": {"scale": (shrink, shrink, shrink)},
+            "Body": {"scale": (xy, xy, z), "loc": (0, -0.04 * _ease(t / 0.65), sink),
+                     "rot": [(ml.WX, lean), (ml.WY, roll)]},
+            "LegL": _leg(legs),
+            "LegR": _leg(-legs),
+            "Face": {"scale": (face, face, face)},
+            "Crust": {"loc": (0, 0, pop), "scale": (crust_s, crust_s, crust_s),
+                      "rot": [(ml.WX, -25 * _ease((t - 0.3) / 0.3))]},
+        }
+
+    ml.add_clip(rig, "Idle", 40, idle, loop=True)
+    ml.add_clip(rig, "Move", 16, move, loop=True)
+    ml.add_clip(rig, "Attack", 16, attack, loop=False)
+    ml.add_clip(rig, "Hit", 10, hit, loop=False)
+    ml.add_clip(rig, "Death", 20, death, loop=False)
+    _floor_check(obj, rig)
+    ml.export_rigged(obj, rig, "shambler")
+    clips_dir = os.environ.get("MONSTER_CLIPS")
+    if clips_dir:
+        ml.render_clips(rig, clips_dir)
