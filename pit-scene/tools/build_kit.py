@@ -10,8 +10,13 @@ Piece frame (Blender; Unity in brackets, same for FBX and GLB):
   -Y      = into the board, the face the player sees            [Unity +Z, transform.forward]
   +X      = along the wall                                      [Unity -X]
   +Z      = up, out of the floor                                [Unity +Y]
-  Wall segments span x in [-0.5625, +0.5625] (one 1.125-unit cell) and keep every face at y >= 0 below z = 1.5,
-  so nothing covers the board edge where balls and units are. The body extends to +Y (outside the board).
+  Wall modules are one 1.125-unit cell (x in [-0.5625, +0.5625]). They are merged 4 at a time into corridor
+  segments (SEGMENTS: start / mid / end sets, 4.5 units = one 4-row recycling group, x in [-2.25, +2.25]).
+  The first and last module of every segment is plain brick, so any segment joins any other. Every face stays
+  at y >= 0 below z = 1.5, so nothing covers the board edge where balls and units are. The body extends to +Y
+  (outside the board).
+  Also built: floor strips (4 rows x cols, per board width), the end-of-corridor gate (tower + lintel), and the
+  loose props. See ASSEMBLY.md.
 """
 import json
 import math
@@ -205,8 +210,10 @@ def assign_uv(f, uvl, region):
     if mode == "wall" and ax != 2:
         a_idx = 0 if ax == 1 else 1
         uvs = []
+        # which cell slot this face lies in (segments are 4 modules side by side): u restarts at each cell
+        cell0 = math.floor((min(c[0] for c in cos) + HALF) / CELL + 1e-4)
         for c in cos:
-            u = (c[a_idx] + HALF) / CELL if a_idx == 0 else (c[1] % CELL) / CELL
+            u = (c[a_idx] + HALF) / CELL - cell0 if a_idx == 0 else (c[1] % CELL) / CELL
             uvs.append((min(max(u, 0.0), 1.0), min(max(c.z / H, 0.0), 1.0)))
         ins = (0, 0)
     else:
@@ -297,7 +304,7 @@ def wall_brick_a():
     b = Builder()
     plinth_and_cope(b)
     brick_face(b, "brick_a")
-    return b.to_object("T1_Wall_BrickA")
+    return b
 
 
 def wall_brick_b():
@@ -309,7 +316,7 @@ def wall_brick_b():
         b.box((x - 0.14, -0.05, z), (x + 0.14, 0.04, z + 0.14), "sw_stone_dk", skip=("+y",))
     # a chipped block sitting on the coping
     b.box((0.1, 0.05, COPE_Z1), (0.42, 0.4, COPE_Z1 + 0.16), "stone", skip=("-z",))
-    return b.to_object("T1_Wall_BrickB")
+    return b
 
 
 def wall_iron_rib():
@@ -332,21 +339,21 @@ def wall_iron_rib():
             b.box((x - 0.025, -0.03, z - 0.025), (x + 0.025, 0.0, z + 0.025), "sw_iron_hi", skip=("+y",))
     for x in (-0.42, -0.26, 0.26, 0.42):
         b.box((x - 0.025, -0.05, 3.955), (x + 0.025, -0.02, 4.005), "sw_iron_hi", skip=("+y",))
-    return b.to_object("T1_Wall_IronRib")
+    return b
 
 
-def wall_chain():
+def wall_chain(strands=((-0.22, 6), (0.0, 9), (0.22, 5)), slack=False):
     b = Builder()
     plinth_and_cope(b)
     alcove(b, -0.42, 0.42, 3.75, 0.34, "brick_b")
-    # hoist bracket across the alcove top + three chain strands
+    # hoist bracket across the alcove top + chain strands
     b.box((-0.4, 0.06, 3.58), (0.4, 0.34, 3.72), "iron", skip=("+y",))
-    for x, n in ((-0.22, 9), (0.0, 13), (0.22, 7)):
+    for x, n in strands:
         chain(b, x, 0.18, 3.58, n)
-    # slack loop: a short strand hooked across
-    for i, x in enumerate((-0.14, -0.07, 0.0, 0.07, 0.14)):
-        diamond_link(b, (x, 0.12, 1.25 - abs(x) * 1.2), i % 2 == 0, half_len=0.05, half_w=0.03, r=0.016)
-    return b.to_object("T1_Wall_Chain")
+    if slack:  # slack loop: a short strand hooked across
+        for i, x in enumerate((-0.14, -0.07, 0.0, 0.07, 0.14)):
+            diamond_link(b, (x, 0.12, 1.25 - abs(x) * 1.2), i % 2 == 0, half_len=0.05, half_w=0.03, r=0.016)
+    return b
 
 
 def wall_mould():
@@ -364,7 +371,7 @@ def wall_mould():
     _merge(b, s)
     # cracked-off piece lying on the sill
     b.box((0.12, 0.02, PLINTH), (0.34, 0.2, PLINTH + 0.1), "clay", skip=("-z",))
-    return b.to_object("T1_Wall_Mould")
+    return b
 
 
 def wall_trough():
@@ -388,7 +395,7 @@ def wall_trough():
     b.face([(-tx + w, ty0 + w, th - 0.1), (-tx + w, ty1 - w, th - 0.1), (tx - w, ty1 - w, th - 0.1), (tx - w, ty0 + w, th - 0.1)], "sw_water", (0, 0, 1))
     # spout pipe out of the back wall
     b.sweep([(0.18, nd, 1.0), (0.18, 0.36, 1.0), (0.18, 0.3, 0.9)], 0.045, 5, "sw_iron", ref=(0, 0, 1))
-    return b.to_object("T1_Wall_Trough")
+    return b
 
 
 def corner_pillar():
@@ -416,7 +423,7 @@ def corner_pillar():
     # iron strap with a copper-tinted plate (the only accent on the walls)
     b.box((-HALF - 0.01, -0.03, 3.0), (HALF + 0.01, depth, 3.16), "iron", skip=("+y", "-z", "+z"))
     b.box((-0.12, -0.06, 2.9), (0.12, -0.02, 3.26), "sw_copper", skip=("+y",))
-    return b.to_object("T1_Pillar")
+    return b
 
 
 def floor_tile(name, region):
@@ -439,8 +446,7 @@ def prop_hook():
     b.sweep(path, rads, 4, "sw_iron", ref=(0, 1, 0), twist=math.pi / 4)
     # eye block where the chain meets the shank
     b.box((-0.06, -0.06, top - 0.04), (0.06, 0.06, top + 0.05), "sw_iron_hi")
-    ob = b.to_object("T1_Prop_Hook")
-    return ob
+    return b
 
 
 def prop_bell_shard():
@@ -452,7 +458,7 @@ def prop_bell_shard():
         v.co.x -= 1.0
     rot = Matrix.Rotation(math.radians(90), 4, "Z")
     bmesh.ops.transform(b.bm, matrix=rot, verts=b.bm.verts)
-    return b.to_object("T1_Prop_BellShard")
+    return b
 
 
 def prop_ladle():
@@ -462,7 +468,7 @@ def prop_ladle():
     b.lathe_shell(prof, 0, 2 * math.pi, 7, 0.025, "sw_rust")
     b.sweep([(0.2, 0, 0.22), (0.45, 0, 0.6), (0.9, 0, 1.45)], 0.032, 5, "sw_iron", ref=(0, 1, 0))
     b.box((0.86, -0.05, 1.4), (0.98, 0.05, 1.62), "sw_wood")
-    return b.to_object("T1_Prop_Ladle")
+    return b
 
 
 def _merge(dst, src):
@@ -477,12 +483,184 @@ def _merge(dst, src):
     src.bm.free()
 
 
-PIECES = [
-    ("wall", wall_brick_a), ("wall", wall_brick_b), ("wall", wall_iron_rib), ("wall", wall_chain),
-    ("wall", wall_mould), ("wall", wall_trough), ("wall", corner_pillar),
-    ("floor", lambda: floor_tile("T1_Floor_A", "floor_a")), ("floor", lambda: floor_tile("T1_Floor_B", "floor_b")),
-    ("prop", prop_hook), ("prop", prop_bell_shard), ("prop", prop_ladle),
-]
+def merge_into(dst, src, mat=None):
+    """Copy src builder's faces into dst (keeping region tags), optionally transformed. No negative scales."""
+    vmap = {}
+    for v in src.bm.verts:
+        vmap[v] = dst.bm.verts.new(mat @ v.co if mat is not None else v.co)
+    for f in src.bm.faces:
+        try:
+            nf = dst.bm.faces.new([vmap[v] for v in f.verts])
+        except ValueError:  # duplicate face
+            continue
+        nf[dst.reg] = f[src.reg]
+        nf.normal_update()
+    src.bm.free()
+
+
+def mod_buttress():
+    """End-set pier: deeper, taller, stepped back as it rises, iron-strapped. Front stays at y = 0."""
+    b = Builder()
+    depth = D + 0.85
+    for z0, z1, ins in ((0.0, 1.7, 0.0), (1.7, 3.6, 0.05), (3.6, 5.4, 0.1)):
+        b.box((-HALF + ins, 0.0, z0), (HALF - ins, depth - ins * 3, z1), "stone", skip=("+y", "-z"))
+    b.box((-HALF - 0.06, -0.12, 5.4), (HALF + 0.06, depth - 0.2, 5.75), "stone", skip=("-z",))
+    for z in (2.0, 4.0):
+        b.box((-HALF - 0.01, -0.03, z), (HALF + 0.01, depth - 0.3, z + 0.18), "iron", skip=("+y", "-z"))
+        b.box((-0.13, -0.07, z - 0.08), (0.13, -0.03, z + 0.26), "sw_copper", skip=("+y",))
+    return b
+
+
+def mod_collapse():
+    """End/mid module: the wall top has fallen in. Left part keeps its coping, the rest is a ragged stub."""
+    b = Builder()
+    stub, mid_top, cut = 3.2, 3.85, -0.2
+    b.box((-HALF, 0, 0), (HALF, D, PLINTH), "stone", skip=("-x", "+x", "-z", "+y"))
+    brick_face(b, "brick_b", -HALF, cut, PLINTH, COPE_Z0)
+    b.box((-HALF, -0.12, COPE_Z0), (cut, D + 0.1, COPE_Z1), "stone", skip=("-x",))
+    brick_face(b, "brick_b", cut, 0.18, PLINTH, mid_top)
+    brick_face(b, "brick_b", 0.18, HALF, PLINTH, stub)
+    for x0, x1, z in ((cut, 0.18, mid_top), (0.18, HALF, stub)):  # broken tops
+        b.face([(x0, 0.04, z), (x0, D, z), (x1, D, z), (x1, 0.04, z)], "stone", (0, 0, 1))
+    # exposed brick ends where the wall steps down
+    b.face([(cut, 0.04, mid_top), (cut, D, mid_top), (cut, D, COPE_Z0), (cut, 0.04, COPE_Z0)], "brick_b", (1, 0, 0))
+    b.face([(0.18, 0.04, stub), (0.18, D, stub), (0.18, D, mid_top), (0.18, 0.04, mid_top)], "brick_b", (1, 0, 0))
+    # close the right neighbour's open wall end and coping end
+    b.face([(HALF, 0.04, stub), (HALF, 0.04, COPE_Z0), (HALF, D, COPE_Z0), (HALF, D, stub)], "brick_b", (-1, 0, 0))
+    b.face([(HALF, -0.12, COPE_Z0), (HALF, -0.12, COPE_Z1), (HALF, D + 0.1, COPE_Z1), (HALF, D + 0.1, COPE_Z0)], "stone", (-1, 0, 0))
+    # rubble lying on the stub
+    for (x, y, z, sx, sy, sz, rz) in ((0.0, 0.3, mid_top, 0.22, 0.16, 0.12, 20), (0.42, 0.55, stub, 0.2, 0.14, 0.14, -35)):
+        r = Builder()
+        r.box((-sx / 2, -sy / 2, 0), (sx / 2, sy / 2, sz), "sw_stone_dk", skip=("-z",))
+        merge_into(b, r, Matrix.Translation((x, y, z)) @ Matrix.Rotation(math.radians(rz), 4, "Z"))
+    return b
+
+
+MODULES = {
+    "brick_a": wall_brick_a, "brick_b": wall_brick_b, "rib": wall_iron_rib,
+    "chain": wall_chain,
+    "chain_heavy": lambda: wall_chain(((-0.2, 8), (0.2, 10)), slack=True),
+    "mould": wall_mould, "trough": wall_trough, "pillar": corner_pillar,
+    "buttress": mod_buttress, "collapse": mod_collapse,
+}
+
+# props baked into a module: (builder fn, matrix in the module's local frame)
+PROP_MOUNTS = {
+    "hook": (prop_hook, lambda: Matrix.Translation((0, -0.2, 3.86))),
+    "ladle": (prop_ladle, lambda: Matrix.Translation((0.3, 0.28, 0.45)) @ Matrix.Rotation(math.radians(200), 4, "Z")
+              @ Matrix.Rotation(math.radians(-12), 4, "Y")),
+    "shard": (prop_bell_shard, lambda: Matrix.Translation((0.34, 0.42, 3.2)) @ Matrix.Rotation(math.radians(10), 4, "Z")
+              @ Matrix.Rotation(math.radians(-15), 4, "X") @ Matrix.Scale(0.6, 4)),
+}
+
+SEG_CELLS = 4                     # one segment = one recycling group = 4 rows along the corridor
+SEG_LEN = SEG_CELLS * CELL        # 4.5
+
+# Wall segments. First and last slot are always a plain brick module, so every segment ends in the same
+# profile (plinth, brick face at y = 0.04, coping) and any segment joins any other, across sets too.
+SEGMENTS = {
+    # start: the town-side upper foundry, intact brick, iron ribs, hoists
+    "T1_Start_A": ("start", ["brick_a", ("rib", "hook"), "chain", "brick_a"]),
+    "T1_Start_B": ("start", ["brick_a", "pillar", "rib", "brick_a"]),
+    "T1_Start_C": ("start", ["brick_a", ("trough", "ladle"), ("rib", "hook"), "brick_a"]),
+    # mid: the working yard, sooty and damaged
+    "T1_Mid_A": ("mid", ["brick_b", "mould", "pillar", "brick_a"]),
+    "T1_Mid_B": ("mid", ["brick_a", ("trough", "ladle"), "brick_b", "brick_b"]),
+    "T1_Mid_C": ("mid", ["brick_b", "chain", "pillar", "brick_b"]),
+    # end: the approach to the casting pit, buttressed, collapsing, heavy chains
+    "T1_End_A": ("end", ["brick_b", "buttress", "mould", "brick_b"]),
+    "T1_End_B": ("end", ["brick_b", ("collapse", "shard"), "buttress", "brick_b"]),
+    "T1_End_C": ("end", ["brick_b", "chain_heavy", "buttress", "brick_b"]),
+}
+
+
+def segment(name, mods):
+    b = Builder()
+    for i, m in enumerate(mods):
+        key, prop = (m, None) if isinstance(m, str) else m
+        mb = MODULES[key]()
+        if prop:
+            fn, mat = PROP_MOUNTS[prop]
+            merge_into(mb, fn(), mat())
+        merge_into(b, mb, Matrix.Translation(((i - (SEG_CELLS - 1) / 2) * CELL, 0, 0)))
+    return b.to_object(name)
+
+
+def floor_strip(cols, variant):
+    """One recycling group of floor: SEG_CELLS rows x cols cells, origin at the group centre, floor level.
+    Seamless along the corridor: every cell edge is the same wide joint."""
+    b = Builder()
+    rnd = random.Random(cols * 31 + variant)
+    p_b = 0.1 if variant == 0 else 0.3
+    for i in range(cols):
+        for j in range(SEG_CELLS):
+            cx, cy = (i - (cols - 1) / 2) * CELL, (j - (SEG_CELLS - 1) / 2) * CELL
+            reg = "floor_b" if rnd.random() < p_b else "floor_a"
+            b.face([(cx - HALF, cy - HALF, 0), (cx + HALF, cy - HALF, 0), (cx + HALF, cy + HALF, 0), (cx - HALF, cy + HALF, 0)], reg, (0, 0, 1))
+    return b.to_object(f"T1_FloorStrip_W{cols}_{'AB'[variant]}")
+
+
+GATE_SPAN = 17.0   # lintel length = tower centre to tower centre for a 13-column corridor (14.625 + 2 x 1.2)
+
+
+def gate_tower():
+    """Casting-pit gate tower (end-of-corridor backdrop). Origin: floor, centre of the front face. Symmetric."""
+    b = Builder()
+    dp = 3.0
+    b.box((-1.3, 0, 0), (1.3, dp + 0.2, 1.2), "stone", skip=("-z", "+y"))
+    b.box((-1.2, 0.1, 1.2), (-0.55, dp, 8.6), "stone", skip=("-z", "+y", "+z"))
+    b.box((0.55, 0.1, 1.2), (1.2, dp, 8.6), "stone", skip=("-z", "+y", "+z"))
+    b.box((-0.55, 0.7, 1.2), (0.55, dp, 7.4), "brick_b", skip=("-z", "+y", "+z", "-x", "+x"))
+    b.face([(-0.55, 0.1, 1.2), (-0.55, 0.7, 1.2), (-0.55, 0.7, 7.4), (-0.55, 0.1, 7.4)], "stone", (1, 0, 0))
+    b.face([(0.55, 0.1, 1.2), (0.55, 0.1, 7.4), (0.55, 0.7, 7.4), (0.55, 0.7, 1.2)], "stone", (-1, 0, 0))
+    b.box((-0.55, 0.1, 7.4), (0.55, dp, 8.6), "stone", skip=("+y", "+z"))
+    b.box((-1.25, 0.05, 5.0), (1.25, dp, 5.25), "iron", skip=("+y",))
+    b.box((-1.35, -0.05, 8.6), (1.35, dp + 0.1, 9.2), "stone", skip=("+y",))
+    for x in (-1.0, 0.0, 1.0):
+        b.box((x - 0.27, 0.0, 9.2), (x + 0.27, 0.8, 9.8), "stone", skip=("-z",))
+    return b.to_object("T1_Gate_Tower")
+
+
+def gate_lintel():
+    """Lintel across the corridor with a hanging, half-broken bell cradle. Origin: floor level, centre, front face.
+    Built for a 13-column corridor; scale X by (cols*1.125 + 2.4) / 17 for narrower ones (it sits deep in fog)."""
+    b = Builder()
+    n = 8
+    w = GATE_SPAN / n
+    for i in range(n):
+        x0 = -GATE_SPAN / 2 + i * w
+        skip = ["+y"] + (["-x"] if i else []) + (["+x"] if i < n - 1 else [])
+        b.box((x0, 0, 8.0), (x0 + w, 1.8, 9.4), "stone", skip=tuple(skip))
+    b.box((-0.6, -0.12, 7.7), (0.6, 1.9, 9.8), "stone", skip=("+y",))
+    for s in (-1, 1):
+        x0, x1 = sorted((s * GATE_SPAN / 2, s * (GATE_SPAN / 2 - 1.3)))
+        b.box((x0, 0.2, 7.2), (x1, 1.6, 8.0), "stone", skip=("+z", "+y"))
+    # hanging cradle: two chains of big links, the left one shorter, so the yoke hangs tilted
+    big = dict(half_len=0.24, half_w=0.14, r=0.05)
+    for x, links in ((-1.8, 5), (1.8, 7)):
+        for i in range(links):
+            diamond_link(b, (x, 0.8, 8.0 - 0.24 - i * 0.38), i % 2 == 1, **big)
+    yoke = Builder()
+    yoke.box((-2.4, -0.25, -0.2), (2.4, 0.25, 0.2), "iron")
+    merge_into(b, yoke, Matrix.Translation((0, 0.8, 8.0 - 0.38 * 6)) @ Matrix.Rotation(math.radians(-6), 4, "Y"))
+    # snapped chain ends dangling near the towers
+    for x, links in ((-5.6, 4), (5.2, 3)):
+        for i in range(links):
+            diamond_link(b, (x, 0.9, 8.0 - 0.24 - i * 0.38), i % 2 == 1, **big)
+    return b.to_object("T1_Gate_Lintel")
+
+
+def _prop(fn, name):
+    return lambda: fn().to_object(name)
+
+
+PIECES = (
+    [("segment:" + SEGMENTS[n][0], (lambda n=n: segment(n, SEGMENTS[n][1]))) for n in SEGMENTS]
+    + [("floor", (lambda c=c, v=v: floor_strip(c, v))) for c in (7, 9, 11, 13) for v in (0, 1)]
+    + [("prop", _prop(prop_hook, "T1_Prop_Hook")), ("prop", _prop(prop_bell_shard, "T1_Prop_BellShard")),
+       ("prop", _prop(prop_ladle, "T1_Prop_Ladle"))]
+    + [("gate", gate_tower), ("gate", gate_lintel)]
+)
 
 
 def unity_vertex_count(me):
@@ -531,13 +709,18 @@ def main():
     objs = build_all(kit)
     fbx_dir = os.path.join(ROOT, "kit", "fbx")
     glb_dir = os.path.join(ROOT, "kit", "glb")
+    for d_ in (fbx_dir, glb_dir):  # drop exports of pieces that no longer exist
+        for fn in os.listdir(d_):
+            if fn.startswith("T1_"):
+                os.remove(os.path.join(d_, fn))
     report = {}
     for name, ob in objs.items():
         v, t = unity_vertex_count(ob.data)
         bb = [ob.matrix_world @ Vector(c) for c in ob.bound_box]
         dims = [round(max(c[i] for c in bb) - min(c[i] for c in bb), 3) for i in range(3)]
         report[name] = {"kind": ob["kit_kind"], "unity_verts": v, "tris": t, "size_xyz_blender": dims,
-                        "budget_ok": v <= VERT_BUDGET}
+                        "budget_ok": v <= VERT_BUDGET,
+                        "modules": [m if isinstance(m, str) else "+".join(m) for m in SEGMENTS[name][1]] if name in SEGMENTS else None}
         export_piece(ob, fbx_dir, glb_dir)
         print(f"KIT {name:22s} verts {v:5d} tris {t:5d} size {dims}")
     # lay pieces out in a row for the kit sheet / .blend

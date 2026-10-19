@@ -58,9 +58,15 @@ A yaw of 10–20° would light one wall, but that wall then throws a shadow abou
 | On board expansion | Recompute the position and aim from the new cols/rows and tween with the walls |
 
 ## Floor
-- Use one `T1_Floor_A` / `T1_Floor_B` tile per cell, laid over the whole wall run (rows −16…+21), `cols` tiles wide. About 1 in 6 tiles is B, chosen by `(i*7 + k*13) % 6 == 0`, so the pattern never reshuffles.
-- Each tile shows 2×2 slabs separated by a hairline, with a wide joint on the cell border. The cell grid therefore reads at exactly 1.125 units.
+- The floor is one `T1_FloorStrip_W{cols}` per 4-row group (ASSEMBLY.md §4). It scrolls and recycles with the walls. About 1 strip in 3 is the more-cracked B variant.
+- Each cell shows 2×2 slabs separated by a hairline, with a wide joint on the cell border. The cell grid therefore reads at exactly 1.125 units, and strips join without a seam.
 - The floor albedo is V 12–17 %. Lit, it reads lighter than the walls and darker than every unit.
+
+## Corridor depth and the gate
+- No ceiling and no far wall. The linear fog above ends the corridor: at 7×9 it is fully fogged from about k = 12, and the live run reaches k = 19.
+- The end-of-corridor gate sits 3 cells past the board's far row on the final boss turn, in the fog's first third. It reads as a dim arch with hanging chains.
+- **Gate renderers: Cast Shadows Off.** The key light runs along the corridor, so the lintel would throw a shadow band across the whole board.
+- The copper spot stays put as the corridor scrolls. It lights whatever segment passes, so it needs no animation.
 
 ## Not in this scene (on purpose)
 - No emissive surfaces on the scenery. The copper strap plate on the pillars is albedo only (#543A26, V 33 %).

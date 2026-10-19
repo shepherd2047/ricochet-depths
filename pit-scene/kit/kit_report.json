@@ -1,102 +1,252 @@
 {
-  "T1_Wall_BrickA": {
-    "kind": "wall",
-    "unity_verts": 28,
-    "tris": 14,
+  "T1_Start_A": {
+    "kind": "segment:start",
+    "unity_verts": 1885,
+    "tris": 944,
     "size_xyz_blender": [
-      1.125,
-      0.97,
+      4.5,
+      1.11,
       4.7
     ],
-    "budget_ok": true
+    "budget_ok": true,
+    "modules": [
+      "brick_a",
+      "rib+hook",
+      "chain",
+      "brick_a"
+    ]
   },
-  "T1_Wall_BrickB": {
-    "kind": "wall",
-    "unity_verts": 88,
-    "tris": 44,
+  "T1_Start_B": {
+    "kind": "segment:start",
+    "unity_verts": 684,
+    "tris": 346,
     "size_xyz_blender": [
-      1.125,
-      0.97,
-      4.86
-    ],
-    "budget_ok": true
-  },
-  "T1_Wall_IronRib": {
-    "kind": "wall",
-    "unity_verts": 472,
-    "tris": 236,
-    "size_xyz_blender": [
-      1.125,
-      0.97,
-      4.7
-    ],
-    "budget_ok": true
-  },
-  "T1_Wall_Chain": {
-    "kind": "wall",
-    "unity_verts": 1710,
-    "tris": 856,
-    "size_xyz_blender": [
-      1.125,
-      0.97,
-      4.7
-    ],
-    "budget_ok": true
-  },
-  "T1_Wall_Mould": {
-    "kind": "wall",
-    "unity_verts": 406,
-    "tris": 204,
-    "size_xyz_blender": [
-      1.125,
-      0.97,
-      4.7
-    ],
-    "budget_ok": true
-  },
-  "T1_Wall_Trough": {
-    "kind": "wall",
-    "unity_verts": 158,
-    "tris": 82,
-    "size_xyz_blender": [
-      1.125,
-      0.97,
-      4.7
-    ],
-    "budget_ok": true
-  },
-  "T1_Pillar": {
-    "kind": "wall",
-    "unity_verts": 156,
-    "tris": 82,
-    "size_xyz_blender": [
-      1.245,
+      4.5,
       1.34,
       5.15
     ],
-    "budget_ok": true
+    "budget_ok": true,
+    "modules": [
+      "brick_a",
+      "pillar",
+      "rib",
+      "brick_a"
+    ]
   },
-  "T1_Floor_A": {
-    "kind": "floor",
-    "unity_verts": 4,
-    "tris": 2,
+  "T1_Start_C": {
+    "kind": "segment:start",
+    "unity_verts": 1277,
+    "tris": 656,
     "size_xyz_blender": [
-      1.125,
-      1.125,
+      4.5,
+      1.11,
+      4.7
+    ],
+    "budget_ok": true,
+    "modules": [
+      "brick_a",
+      "trough+ladle",
+      "rib+hook",
+      "brick_a"
+    ]
+  },
+  "T1_Mid_A": {
+    "kind": "segment:mid",
+    "unity_verts": 679,
+    "tris": 344,
+    "size_xyz_blender": [
+      4.5,
+      1.34,
+      5.15
+    ],
+    "budget_ok": true,
+    "modules": [
+      "brick_b",
+      "mould",
+      "pillar",
+      "brick_a"
+    ]
+  },
+  "T1_Mid_B": {
+    "kind": "segment:mid",
+    "unity_verts": 633,
+    "tris": 334,
+    "size_xyz_blender": [
+      4.5,
+      0.97,
+      4.86
+    ],
+    "budget_ok": true,
+    "modules": [
+      "brick_a",
+      "trough+ladle",
+      "brick_b",
+      "brick_b"
+    ]
+  },
+  "T1_Mid_C": {
+    "kind": "segment:mid",
+    "unity_verts": 1371,
+    "tris": 690,
+    "size_xyz_blender": [
+      4.5,
+      1.34,
+      5.15
+    ],
+    "budget_ok": true,
+    "modules": [
+      "brick_b",
+      "chain",
+      "pillar",
+      "brick_b"
+    ]
+  },
+  "T1_End_A": {
+    "kind": "segment:end",
+    "unity_verts": 723,
+    "tris": 362,
+    "size_xyz_blender": [
+      4.5,
+      1.72,
+      5.75
+    ],
+    "budget_ok": true,
+    "modules": [
+      "brick_b",
+      "buttress",
+      "mould",
+      "brick_b"
+    ]
+  },
+  "T1_End_B": {
+    "kind": "segment:end",
+    "unity_verts": 611,
+    "tris": 306,
+    "size_xyz_blender": [
+      4.5,
+      1.72,
+      5.75
+    ],
+    "budget_ok": true,
+    "modules": [
+      "brick_b",
+      "collapse+shard",
+      "buttress",
+      "brick_b"
+    ]
+  },
+  "T1_End_C": {
+    "kind": "segment:end",
+    "unity_verts": 1499,
+    "tris": 750,
+    "size_xyz_blender": [
+      4.5,
+      1.72,
+      5.75
+    ],
+    "budget_ok": true,
+    "modules": [
+      "brick_b",
+      "chain_heavy",
+      "buttress",
+      "brick_b"
+    ]
+  },
+  "T1_FloorStrip_W7_A": {
+    "kind": "floor",
+    "unity_verts": 112,
+    "tris": 56,
+    "size_xyz_blender": [
+      7.875,
+      4.5,
       0.0
     ],
-    "budget_ok": true
+    "budget_ok": true,
+    "modules": null
   },
-  "T1_Floor_B": {
+  "T1_FloorStrip_W7_B": {
     "kind": "floor",
-    "unity_verts": 4,
-    "tris": 2,
+    "unity_verts": 112,
+    "tris": 56,
     "size_xyz_blender": [
-      1.125,
-      1.125,
+      7.875,
+      4.5,
       0.0
     ],
-    "budget_ok": true
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_FloorStrip_W9_A": {
+    "kind": "floor",
+    "unity_verts": 144,
+    "tris": 72,
+    "size_xyz_blender": [
+      10.125,
+      4.5,
+      0.0
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_FloorStrip_W9_B": {
+    "kind": "floor",
+    "unity_verts": 144,
+    "tris": 72,
+    "size_xyz_blender": [
+      10.125,
+      4.5,
+      0.0
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_FloorStrip_W11_A": {
+    "kind": "floor",
+    "unity_verts": 176,
+    "tris": 88,
+    "size_xyz_blender": [
+      12.375,
+      4.5,
+      0.0
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_FloorStrip_W11_B": {
+    "kind": "floor",
+    "unity_verts": 176,
+    "tris": 88,
+    "size_xyz_blender": [
+      12.375,
+      4.5,
+      0.0
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_FloorStrip_W13_A": {
+    "kind": "floor",
+    "unity_verts": 208,
+    "tris": 104,
+    "size_xyz_blender": [
+      14.625,
+      4.5,
+      0.0
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_FloorStrip_W13_B": {
+    "kind": "floor",
+    "unity_verts": 208,
+    "tris": 104,
+    "size_xyz_blender": [
+      14.625,
+      4.5,
+      0.0
+    ],
+    "budget_ok": true,
+    "modules": null
   },
   "T1_Prop_Hook": {
     "kind": "prop",
@@ -107,7 +257,8 @@
       0.12,
       1.04
     ],
-    "budget_ok": true
+    "budget_ok": true,
+    "modules": null
   },
   "T1_Prop_BellShard": {
     "kind": "prop",
@@ -118,7 +269,8 @@
       0.516,
       1.208
     ],
-    "budget_ok": true
+    "budget_ok": true,
+    "modules": null
   },
   "T1_Prop_Ladle": {
     "kind": "prop",
@@ -129,6 +281,31 @@
       0.497,
       1.62
     ],
-    "budget_ok": true
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_Gate_Tower": {
+    "kind": "gate",
+    "unity_verts": 166,
+    "tris": 84,
+    "size_xyz_blender": [
+      2.7,
+      3.25,
+      9.8
+    ],
+    "budget_ok": true,
+    "modules": null
+  },
+  "T1_Gate_Lintel": {
+    "kind": "gate",
+    "unity_verts": 1092,
+    "tris": 546,
+    "size_xyz_blender": [
+      17.0,
+      2.02,
+      4.585
+    ],
+    "budget_ok": true,
+    "modules": null
   }
 }

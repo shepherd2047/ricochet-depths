@@ -1,14 +1,17 @@
-"""Headless Blender: lay the Theme 1 kit around a board and render a preview with the in-game lighting/fog.
+"""Headless Blender: lay the Theme 1 treadmill corridor (spec.md section 1.3a) around a board and render a
+preview with the in-game camera, lighting and fog.
 
 Usage (from pit-scene/, after tools/build_kit.py):
-  /opt/homebrew/bin/blender -b kit/t1_kit.blend -P tools/assemble.py -- --cols 7 --rows 9 --out preview/t1_board_7x9.png
-  /opt/homebrew/bin/blender -b kit/t1_kit.blend -P tools/assemble.py -- --cols 13 --rows 15 --out preview/t1_board_13x15.png
-  /opt/homebrew/bin/blender -b kit/t1_kit.blend -P tools/assemble.py -- --kitsheet --out preview/t1_kit_sheet.png
-Options: --tilt 30 (camera pitch into the pit, 0 = style.md straight-on) --balls (placeholder emissive balls)
+  B=/opt/homebrew/bin/blender
+  $B -b kit/t1_kit.blend -P tools/assemble.py -- --cols 7 --rows 9 --turn 1 --out preview/t1_corridor_7x9_start.png
+  $B -b kit/t1_kit.blend -P tools/assemble.py -- --cols 9 --rows 11 --turn 30 --out preview/t1_corridor_9x11_mid.png
+  $B -b kit/t1_kit.blend -P tools/assemble.py -- --cols 13 --rows 15 --turn 60 --out preview/t1_corridor_13x15_final.png
+  $B -b kit/t1_kit.blend -P tools/assemble.py -- --kitsheet --out preview/t1_kit_sheet.png
+Options: --final 60 (final boss turn) --tilt 30 --fov 65 --balls (placeholder emissive balls) --seed N
 
 Pit frame (Blender): floor = XY plane at z = 0, board centred on the origin, columns along X, rows along Y
 (player at -Y, the far end / enemy side at +Y), +Z = out of the floor toward the camera.
-The layout rules here are the same ones ASSEMBLY.md describes for Unity; keep them in sync.
+The layout rules here are the ones ASSEMBLY.md describes for Unity (pick_segments etc.); keep them in sync.
 """
 import argparse
 import math
@@ -18,11 +21,17 @@ import bpy
 from mathutils import Euler, Vector
 
 CELL = 1.125
-K_NEAR, K_FAR = -16, 21          # wall + floor run in cells along Y, same for every board size (covers the 13x15 camera)
-PATTERN = ["T1_Pillar", "T1_Wall_BrickA", "T1_Wall_IronRib", "T1_Wall_BrickB",
-           "T1_Wall_Chain", "T1_Wall_BrickA", "T1_Wall_Trough", "T1_Wall_BrickB"]
-RIGHT_OFFSET = 4                 # right wall reads the pattern 4 slots later
-RIGHT_SWAP = {"T1_Wall_Chain": "T1_Wall_Mould"}
+GROUP = 4                         # rows per recycling group = one wall segment length (4.5 units)
+G_MIN, G_MAX = -4, 4              # 9 groups alive: cells k = 4g .. 4g+3, i.e. k -16 .. 19 (screen bottom .. fog end)
+SETS = {
+    "start": ["T1_Start_A", "T1_Start_B", "T1_Start_C"],
+    "mid": ["T1_Mid_A", "T1_Mid_B", "T1_Mid_C"],
+    "end": ["T1_End_A", "T1_End_B", "T1_End_C"],
+}
+SET_EDGES = (0.3, 0.7)            # progress < 0.3 start, < 0.7 mid, else end
+SET_BLEND = 0.05                  # +/- jitter on progress per group so set changes are not a hard line
+GATE_K_AFTER_BOARD = 3            # gate front stops this many cells beyond the board's far row
+TOWER_OFF = 1.2                   # gate tower centre outside the wall face
 
 # lighting / fog (see LIGHTING.md; Unity values there)
 FOG_RGB = (38, 41, 55)
@@ -46,6 +55,9 @@ def args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cols", type=int, default=7)
     ap.add_argument("--rows", type=int, default=9)
+    ap.add_argument("--turn", type=int, default=1)
+    ap.add_argument("--final", type=int, default=60)
+    ap.add_argument("--seed", type=int, default=12345)
     ap.add_argument("--tilt", type=float, default=30.0)
     ap.add_argument("--fov", type=float, default=65.0)
     ap.add_argument("--balls", action="store_true")
@@ -67,49 +79,71 @@ def place(src, loc, rot_z_deg, coll, name=None):
     return ob
 
 
-def layout_board(cols, rows, coll, balls=False):
+def ghash(*xs):
+    """Small deterministic integer hash (same in C#: unchecked uint math)."""
+    h = 2166136261
+    for x in xs:
+        h = ((h ^ (x & 0xFFFFFFFF)) * 16777619) & 0xFFFFFFFF
+    return h
+
+
+def group_progress(g, turn, final, rows):
+    """Progress 0..1 of the rows in group g: the turn at which those rows reach the board's far row."""
+    k_centre = g * GROUP + (GROUP - 1) / 2
+    row_turn = turn + (k_centre - rows / 2)
+    return min(max(row_turn / final, 0.0), 1.0)
+
+
+def pick_set(p, h):
+    p = p + ((h % 1000) / 1000 - 0.5) * 2 * SET_BLEND
+    return "start" if p < SET_EDGES[0] else "mid" if p < SET_EDGES[1] else "end"
+
+
+def pick_segments(g, p, seed, prev):
+    """Left and right segment names for group g. Left != right; a side avoids repeating its previous segment
+    when the set has 3+ pieces. prev = {'L': name, 'R': name} of group g-1 (updated in place)."""
+    out = {}
+    for side in ("L", "R"):
+        h = ghash(seed, g, ord(side))
+        names = SETS[pick_set(p, h)]
+        n = len(names)
+        i = (h >> 10) % n
+        for _ in range(n):
+            bad = names[i] == out.get("L") or (n >= 3 and names[i] == prev.get(side))
+            if not bad:
+                break
+            i = (i + 1) % n
+        out[side] = names[i]
+    prev.update(out)
+    return out
+
+
+def layout_corridor(cols, rows, turn, final, seed, coll, balls=False):
     k = kit()
     half_w = cols * CELL / 2
     count = {}
-    for side in (-1, 1):
-        x = side * half_w
-        rot = 90 if side < 0 else -90        # piece -Y (inner face) -> toward the board centre
-        for kk in range(K_NEAR, K_FAR + 1):
-            idx = (kk + (RIGHT_OFFSET if side > 0 else 0)) % len(PATTERN)
-            name = PATTERN[idx]
-            if side > 0:
-                name = RIGHT_SWAP.get(name, name)
-            if kk == K_NEAR:
-                name = "T1_Pillar"          # close the near end of each run
-            y = kk * CELL
-            place(k[name], (x, y, 0), rot, coll)
-            count[name] = count.get(name, 0) + 1
-            # props attached to wall slots (positions in the piece's local frame, rotated to world)
-            local = None
-            if name == "T1_Wall_IronRib" and (kk // 8) % 2 == 0:
-                local, prop, prot = (0.0, -0.2, 3.86), "T1_Prop_Hook", 0
-            elif name == "T1_Wall_Trough" and side < 0:
-                local, prop, prot = (0.3, 0.28, 0.45), "T1_Prop_Ladle", 200
-            if local:
-                lx, ly, lz = local
-                c, s = math.cos(math.radians(rot)), math.sin(math.radians(rot))
-                wpos = (x + lx * c - ly * s, y + lx * s + ly * c, lz)
-                ob = place(k[prop], wpos, rot + prot, coll)
-                if prop == "T1_Prop_Ladle":
-                    ob.rotation_euler = Euler((0, math.radians(-12), math.radians(rot + prot)))
-                count[prop] = count.get(prop, 0) + 1
-    # floor: one tile per cell, cols wide, over the whole run
-    for i in range(cols):
-        for kk in range(K_NEAR, K_FAR + 1):
-            fx = (i - (cols - 1) / 2) * CELL
-            variant = "T1_Floor_B" if (i * 7 + kk * 13) % 6 == 0 else "T1_Floor_A"
-            place(k[variant], (fx, kk * CELL, 0), 0, coll)
-            count[variant] = count.get(variant, 0) + 1
-    # bell shards on the floor, outside the largest board's rows (|row| > 7.5 cells)
-    for (sx, kk, r) in ((-1, 12, 25), (1, 16, -160), (1, -10, 200)):
-        x = sx * (half_w - 0.7)
-        place(k["T1_Prop_BellShard"], (x, kk * CELL, 0), r + (90 if sx < 0 else -90), coll)
-        count["T1_Prop_BellShard"] = count.get("T1_Prop_BellShard", 0) + 1
+    prev = {}
+    for g in range(G_MIN, G_MAX + 1):
+        y = (g * GROUP + (GROUP - 1) / 2) * CELL                 # group centre
+        p = group_progress(g, turn, final, rows)
+        segs = pick_segments(g, p, seed, prev)
+        for side, x, rot in (("L", -half_w, 90), ("R", half_w, -90)):   # piece -Y (inner face) -> board centre
+            place(k[segs[side]], (x, y, 0), rot, coll)
+            count[segs[side]] = count.get(segs[side], 0) + 1
+        fl = f"T1_FloorStrip_W{cols}_{'B' if ghash(seed, g, 7) % 3 == 0 else 'A'}"
+        place(k[fl], (0, y, 0), 0, coll)
+        count[fl] = count.get(fl, 0) + 1
+        print("GROUP %+d p=%.2f %s | %s" % (g, p, segs["L"], segs["R"]))
+    # end-of-corridor gate: scrolls in with the corridor and stops GATE_K_AFTER_BOARD cells past the far row
+    k_gate = rows / 2 + GATE_K_AFTER_BOARD + (final - turn)
+    if k_gate <= G_MAX * GROUP + GROUP:
+        yg = k_gate * CELL
+        gate = [place(k["T1_Gate_Tower"], (sx * (half_w + TOWER_OFF), yg, 0), 0, coll) for sx in (-1, 1)]
+        lt = place(k["T1_Gate_Lintel"], (0, yg, 0), 0, coll)
+        lt.scale.x = (cols * CELL + 2 * TOWER_OFF) / 17.0
+        for ob in gate + [lt]:
+            ob.visible_shadow = False   # Unity: Cast Shadows Off; its shadow band would cross the board
+        count["T1_Gate"] = 1
     if balls:
         for (bx, by, col) in ((-1.2, -2.0, (255, 210, 120)), (0.9, 0.6, (140, 240, 235)), (2.0, 2.6, (255, 160, 70))):
             bpy.ops.mesh.primitive_uv_sphere_add(radius=0.18, location=(bx, by, 0.25), segments=12, ring_count=6)
@@ -278,34 +312,32 @@ def render_setup(out, res):
 
 
 def kitsheet(out, res):
+    """Front view of every piece: one row per wall set, then floor strips, props and the gate."""
     sc = bpy.context.scene
     coll = bpy.data.collections.new("Sheet")
     sc.collection.children.link(coll)
     k = kit()
-    order = ["T1_Wall_BrickA", "T1_Wall_BrickB", "T1_Wall_IronRib", "T1_Wall_Chain", "T1_Wall_Mould",
-             "T1_Wall_Trough", "T1_Pillar", "T1_Prop_Hook", "T1_Prop_BellShard", "T1_Prop_Ladle",
-             "T1_Floor_A", "T1_Floor_B"]
-    x = 0
-    for i, n in enumerate(order):
-        if n.startswith("T1_Prop"):
-            z = 4.2 if n == "T1_Prop_Hook" else 0
-            place(k[n], (x, -0.6, z), 0 if n != "T1_Prop_BellShard" else 0, coll)
-        else:
-            place(k[n], (x, 0, 0 if not n.startswith("T1_Floor") else 0.001), 0, coll)
-        x += 1.6
-    for i in range(-1, 13):
-        for j in range(-2, 2):
-            place(k["T1_Floor_A"], (i * CELL, j * CELL - 0.6, -0.002), 0, coll)
+    rows = [SETS["start"], SETS["mid"], SETS["end"]]
+    for r, names in enumerate(rows):
+        for i, n in enumerate(names):
+            place(k[n], (i * 5.0, 0, (2 - r) * 6.5), 0, coll)
+    place(k["T1_FloorStrip_W7_A"], (5.0, -2.6, -1.2), 0, coll)
+    for i, n in enumerate(("T1_Prop_Hook", "T1_Prop_BellShard", "T1_Prop_Ladle")):
+        place(k[n], (16.0 + i * 1.8, -0.6, 4.2 if n == "T1_Prop_Hook" else 13.6), 0, coll)
+    for sx in (-1, 1):
+        place(k["T1_Gate_Tower"], (25.5 + sx * 7.4, 0, 0), 0, coll)
+    lt = place(k["T1_Gate_Lintel"], (25.5, 0, 0), 0, coll)
+    lt.scale.x = 14.8 / 17.0
     world_trilight()
     sun = bpy.data.lights.new("Key", "SUN"); sun.energy = 3.5; sun.angle = math.radians(5)
     so = bpy.data.objects.new("Key", sun); so.rotation_euler = Euler((math.radians(55), 0, math.radians(-25)))
     sc.collection.objects.link(so)
-    cd = bpy.data.cameras.new("Cam"); cd.type = "ORTHO"; cd.ortho_scale = x + 0.5
+    cd = bpy.data.cameras.new("Cam"); cd.type = "ORTHO"; cd.ortho_scale = 40
     co = bpy.data.objects.new("Cam", cd)
-    co.location = (x / 2 - 0.8, -14, 4.5); co.rotation_euler = Euler((math.radians(78), 0, 0))
+    co.location = (16.2, -30, 9.2); co.rotation_euler = Euler((math.radians(88), 0, 0))
     sc.collection.objects.link(co); sc.camera = co
     render_setup(out, res)
-    sc.render.resolution_x, sc.render.resolution_y = 2400, 900
+    sc.render.resolution_x, sc.render.resolution_y = 2400, 1400
     bpy.data.worlds["T1_World"].node_tree.nodes["Background.001"].inputs["Color"].default_value = lin((70, 74, 84))
     bpy.ops.render.render(write_still=True)
 
@@ -318,7 +350,7 @@ def main():
     sc = bpy.context.scene
     coll = bpy.data.collections.new(f"Board_{a.cols}x{a.rows}")
     sc.collection.children.link(coll)
-    count = layout_board(a.cols, a.rows, coll, a.balls)
+    count = layout_corridor(a.cols, a.rows, a.turn, a.final, a.seed, coll, a.balls)
     dist = camera(a.cols, a.rows, a.tilt, a.fov)
     add_fog_to_material(dist)
     world_trilight()
