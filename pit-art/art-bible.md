@@ -131,6 +131,7 @@ Generated with Figma AI `generate_image` (user's credits) in a new Figma file "P
 3. The script: joins meshes, drops floating specks, reorients, rescales (`--height`), decimates to the target, re-unwraps, bakes the base colour to a small texture, posterises (`--quantize N`, two clusters reserved for saturated accents) and remaps value into the layer's range (`--vrange` body, `--accent-vrange` accents). Example for an enemy: `--quantize 10 --vrange 0.04,0.30 --accent-vrange 0.55,0.85`.
    - **Vertex budget vs flat shading**: hard flat normals make Unity count ~3 verts per triangle (300-tri Shambler = ~900 verts; an 800-tri hero = ~2400, over style.md's 1000). Export with `--normals smooth` (300 tris = ~300 verts) and get the faceted look in the URP shader from screen-space derivatives instead. Or halve the triangle targets if hard normals are wanted.
    - Small emissive details (eyes, vents) come out tiny and dull from image-to-3D at these budgets; paint them into the 512 emissive map by hand.
+   - **Enemies are hand-built** (2026-10-19): `tools/monsters/<key>.py` on top of `tools/monster_lib.py`, flat-shaded (Unity verts = face corners ≤ 400). All theme-1 enemies share one 512 albedo atlas + one 512 emissive map (`models/lowpoly/enemy_theme1_*.png`), which matches §5. Image-to-3D is kept for heroes.
 4. Heroes → Mixamo (below) → FBX into Unity. Enemies → Unity directly; idle/walk/attack/death as baked vertex animation at 8–12 fps (style.md §6).
 5. Atlas packing: in Unity or Blender, place each 256/512 texture into the theme atlas and offset UVs.
 

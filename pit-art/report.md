@@ -64,16 +64,17 @@ Clean room: I read only `ballpit-spec/style.md` and `ballpit-spec/spec.md` (arch
 | Model | Source | Tris | Unity verts |
 |---|---|---|---|
 | `hero_tinker.glb` (bold) | TRELLIS from bold concept | 700 | ~975 |
-| `enemy_shambler.glb` (dark) | TripoSR | 300 | ≤ 382 |
-| `enemy_brute.glb` (dark) | TripoSR | 350 | ≤ 382 |
-| `enemy_spitter.glb` (dark) | TripoSR | 300 | ≤ 382 |
+| `enemy_shambler.glb` (dark) | hand-built in Blender (`tools/monsters/shambler.py`) | 198 | 392 |
+| `enemy_brute.glb` (dark) | hand-built (`tools/monsters/brute.py`) | 190 | 374 |
+| `enemy_spitter.glb` (dark) | hand-built (`tools/monsters/spitter.py`) | 200 | 396 |
 
-  Tinker settings: `--tex 512 --quantize 16 --accent-sat 1.01 --sat-boost 1.2 --height 1.0 --normals smooth`. Preview sheet: `models/lowpoly/_starter_set.png` (each model is framed on its own, so sizes on the sheet aren't to scale).
-- **Not done:** the free TRELLIS ZeroGPU quota ran out (reset in about 21.5 h from 13:52 on 2026-10-19). So the bold Wren / Osk / Juno concepts (`concept/v2/`) aren't converted, and the 3 monsters stay on the lower-quality TripoSR meshes: blobby, very dark, with small accents. Redoing them via TRELLIS from the original dark concepts once the quota resets would improve shape and detail.
+  Tinker settings: `--tex 512 --quantize 16 --accent-sat 1.01 --sat-boost 1.2 --height 1.0 --normals smooth`. Preview sheet: `models/lowpoly/_starter_set.png` (true scale, rendered by `tools/lineup.py`).
+- **Monsters hand-built (user: "can you redraw the three monsters yourself"):** the TRELLIS ZeroGPU quota ran out (resets around 2026-10-20 11:20), and the TripoSR meshes were dark blobs. So the three were modelled from primitives by script, one agent per monster, using the shared `tools/monster_lib.py`. That library provides lathe/box/wedge parts, per-face UVs onto one shared 512 theme atlas (`enemy_theme1_albedo.png` + `enemy_theme1_emissive.png`, made of colour swatches plus brick, slag-rock and rivet tiles), flat-shaded GLB export, Unity vert count and preview. Glow (eyes, flue mouth) lives only in the emissive map. To rebuild, run `blender -b -P tools/monsters/<key>.py`. Known gaps: plates are flat slabs, there are no glossy tar drips (one roughness for the whole material), and the Brute's face plate doesn't wrap around the cheeks.
+- The bold Wren / Osk / Juno concepts (`concept/v2/`) aren't converted. Tinker's raw TRELLIS mesh has a launcher part floating off the right arm; it needs a fix before rigging.
 - The test bold Shambler was discarded. The old dark Wren / Osk / Juno low-poly models are still in `models/lowpoly/` but parked.
 
 ## Next
 
 1. Done: the 7 remaining concepts are generated (13 Figma AI calls in total). Mender's wax is lighter than the enemy value range; decimate.py's `--vrange` pulls it down.
-2. After the quota resets: TRELLIS for Shambler / Brute / Spitter (dark concepts), then the bold Wren / Osk / Juno when more heroes are wanted.
+2. Remaining 5 enemies + Bellwarden: hand-build them with `monster_lib.py` the same way (faster and cleaner than image-to-3D at ≤ 400 verts). TRELLIS for the bold Wren / Osk / Juno when more heroes are wanted.
 3. Analysis side: run the similarity check on `concept/` and `models/lowpoly/`.
