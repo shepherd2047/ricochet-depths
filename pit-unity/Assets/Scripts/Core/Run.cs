@@ -29,10 +29,11 @@ namespace Pit.Core
         public bool FinalStarted;
         // spec §1.3a treadmill corridor: Scroll counts cells the floor has moved toward the player (1 per turn length at
         // ScrollSpeed 1), FloorShift is the same in board units plus the board expansions' shifts, so the view can
-        // keep the corridor under the units. FarY is the invisible far wall (spec §4.4) the balls bounce on: the
-        // farthest floor line the camera shows, set by the view each frame (board y, above the board's far row).
+        // keep the corridor under the units. FarY is the invisible far wall (spec §4.4) the balls bounce on: the far
+        // edge of the board's top row, rows × CELL from the near edge, so board y 0; it moves back with an expansion.
+        // New waves spawn above it and only come into play once the floor scrolls them over it.
         public float Scroll, ScrollSpeed = 1, FloorShift;
-        public float FarY = -6 * CELL;
+        public const float FarY = 0;
         public Expansion Expand;
         public Enemy Boss;
 

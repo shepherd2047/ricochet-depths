@@ -542,10 +542,6 @@ namespace Pit.Game
             var aim = centre + Kit(r.Bw / 2, 0.15f * rows * C, 1.5f);
             spot.transform.localPosition = sp;
             spot.transform.localRotation = Quaternion.LookRotation(aim - sp, new Vector3(0, 0, -1));
-
-            // spec §4.4: the far wall is the farthest floor line on screen, deep in the fog
-            var top = ScreenToBoard(viewW / 2, 0);
-            r.FarY = top.x > -998 ? Mathf.Min(top.y, -C) : -6 * C;
         }
 
         /// <summary>Kit-frame offset (across, along the corridor, up) to the game's world frame.</summary>
