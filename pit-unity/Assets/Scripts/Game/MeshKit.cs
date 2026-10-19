@@ -416,11 +416,19 @@ namespace Pit.Game
             var ta = Resources.Load<TextAsset>("Models/" + name);
             if (ta == null) { assets[name] = null; return null; }
             var b = ta.bytes;
-            int nv = System.BitConverter.ToInt32(b, 0), ni = System.BitConverter.ToInt32(b, 4), o = 8;
+            // v1: nv, ni, 32-byte verts. v2 (current glb_to_bytes.py): nv, nsub, nsub counts, 36-byte verts (+ RGBA, unused
+            // here); the submeshes are merged. A v1 index count is at least 3, so a second int below 3 means v2.
+            int nv = System.BitConverter.ToInt32(b, 0), ni = System.BitConverter.ToInt32(b, 4), o = 8, stride = 32;
+            if (ni < 3)
+            {
+                int nsub = ni; ni = 0;
+                for (int k = 0; k < nsub; k++, o += 4) ni += System.BitConverter.ToInt32(b, o);
+                stride = 36;
+            }
             var pos = new List<Vector3>(nv); var nor = new List<Vector3>(nv); var uv = new List<Vector2>(nv); var col = new List<Color32>(nv);
             float s = faceAway ? -1 : 1;
             var mn = new Vector3(1e9f, 1e9f, 1e9f); var mx = -mn;
-            for (int i = 0; i < nv; i++, o += 32)
+            for (int i = 0; i < nv; i++, o += stride)
             {
                 var p = new Vector3(s * F(b, o), s * F(b, o + 4), -F(b, o + 8));
                 pos.Add(p); mn = Vector3.Min(mn, p); mx = Vector3.Max(mx, p);
