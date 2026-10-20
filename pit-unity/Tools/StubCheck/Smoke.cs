@@ -153,6 +153,7 @@ static class Smoke
         int cellsUsed = PixelArt.CellOf("ring") + 1;
         Console.WriteLine($"verts: foe max {Models.MaxFoeVerts}, boss max {Models.MaxBossVerts}, hero {Models.HeroVerts}, wall {Models.WallModules()[0].VertexCount}; atlas cells used {cellsUsed}/256");
         Console.WriteLine($"revives {revives}  frames {frames}  errors {errors}  gameobjects {GameObject.Created}");
+        Console.WriteLine($"vfx: balls {RicochetVfx.VfxBank.Balls} stops {RicochetVfx.VfxBank.Stops} hits {RicochetVfx.VfxBank.Hits} flashes {RicochetVfx.VfxBank.Flashes} statuses {RicochetVfx.VfxBank.Statuses} chains {RicochetVfx.VfxBank.Chains} rows {RicochetVfx.VfxBank.Rows}");
         return errors > 0 ? 1 : 0;
     }
 

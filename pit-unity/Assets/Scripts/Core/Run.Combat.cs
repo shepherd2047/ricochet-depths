@@ -85,6 +85,7 @@ namespace Pit.Core
         void HitEnemy(FieldBall b, Enemy e, HitInfo info)
         {
             if (Invulnerable(e)) return;
+            RaiseHit(b, e);
             var st = b.St;
             float baseDmg;
             if (st == null) baseDmg = RollInt(BabyMin, BabyMax);
@@ -141,6 +142,7 @@ namespace Pit.Core
         void ApplyArea(FieldBall b, Enemy e, Stats st, HitInfo info, float half)
         {
             float cx = e.Cx, cy = e.Cy;
+            string src = b.Inst != null ? b.Inst.Id : null;
             float sc = Aoe * (st.G(K.Mult) > 100 ? st.G(K.Mult) / 100f : 1) * half;
             uint col = b.Color;
             if (st.Has(K.ChainMin))
@@ -159,16 +161,17 @@ namespace Pit.Core
                 for (int i = 0; i < n; i++)
                 {
                     var o = near[i].Value;
-                    AddBeam(new Beam { Kind = BeamKind.Arc, X1 = px, Y1 = py, X2 = o.Cx, Y2 = o.Cy, T = 0.18f, Color = 0xffe14d });
+                    AddBeam(new Beam { Kind = BeamKind.Arc, X1 = px, Y1 = py, X2 = o.Cx, Y2 = o.Cy, T = 0.18f, Color = 0xffe14d, Src = src, Target = o.Id });
                     px = o.Cx; py = o.Cy;
                     DealDamage(o, RollInt(st.G(K.ChainMin), st.G(K.ChainMax)) * sc, 0xffe14d);
                 }
             }
             if (st.Has(K.RowMin))
             {
-                AddBeam(new Beam { Kind = BeamKind.Row, Y = cy, T = 0.2f, Color = col });
+                var row = new Beam { Kind = BeamKind.Row, X = b.X, Y = cy, T = 0.2f, Color = col, Src = src, Targets = new List<int>() };
+                AddBeam(row);
                 foreach (var o in Enemies.ToArray())
-                    if (o != e && Visible(o) && o.Y < cy && o.Bottom > cy) DealDamage(o, RollInt(st.G(K.RowMin), st.G(K.RowMax)) * sc, col);
+                    if (o != e && Visible(o) && o.Y < cy && o.Bottom > cy) { row.Targets.Add(o.Id); DealDamage(o, RollInt(st.G(K.RowMin), st.G(K.RowMax)) * sc, col); }
             }
             if (st.Has(K.ColMin))
             {

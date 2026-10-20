@@ -24,7 +24,7 @@ using UnityEngine.Rendering.Universal;
 
 namespace Pit.Game
 {
-    public sealed class Board3D
+    public sealed partial class Board3D
     {
         public const float Fov = 65, Near = 0.3f, Far = 1000;
         public const float Pitch = 40;                           // degrees away from looking straight at the plane
@@ -76,6 +76,8 @@ namespace Pit.Game
             public Dictionary<string, Models.Clip> Clips;
             public string Clip;
             public float ClipAt;
+            // RicochetVfx (Board3D.Vfx.cs): feedback touched, status overlays on, and whether a VFX ball caused them
+            public bool Fx, BurnOn, FrostOn, BurnSrc, FrostSrc;
         }
 
         // the Attack clip's release frame: pit-art report, projectile on frame 8 of 16 at 24 fps
@@ -275,6 +277,7 @@ namespace Pit.Game
 
             Scenery(r);
             Units(r);
+            Vfx(r);
             Hero(r);
             AimOverlay(r, wv, g);
         }
@@ -695,6 +698,7 @@ namespace Pit.Game
             View v;
             if (live.TryGetValue(id, out v)) return v;
             v = pool.Count > 0 ? pool.Pop() : NewView();
+            VfxRelease(v);
             v.Id = id; v.DieT = -1; v.Clips = null; v.Clip = null;
             if (!v.Go.activeSelf) v.Go.SetActive(true);
             for (int i = 0; i < 3; i++) if (v.Plates[i].activeSelf) v.Plates[i].SetActive(false);
@@ -726,8 +730,9 @@ namespace Pit.Game
 
         void Clear()
         {
-            foreach (var kv in live) { kv.Value.Go.SetActive(false); pool.Push(kv.Value); }
+            foreach (var kv in live) { VfxRelease(kv.Value); kv.Value.Go.SetActive(false); pool.Push(kv.Value); }
             live.Clear();
+            VfxClear();
         }
 
         void Units(Run r)
@@ -747,7 +752,8 @@ namespace Pit.Game
                 var model = !e.Boss && !e.Pod && FoeModels.TryGetValue(e.Type, out mk) ? Models.Model(mk, false, true, unitShader) : null;
                 Mesh mesh = model != null ? model.Mesh : MeshFor(e);
                 v.Clips = model != null ? model.Clips : null;
-                if (v.Clips != null) mesh = FoeClip(v, e, now);
+                // a VFX freeze holds the pose: its ice shell is a copy of the mesh at the moment the freeze began
+                if (v.Clips != null) mesh = v.FrostOn && v.Mf.sharedMesh != null ? v.Mf.sharedMesh : FoeClip(v, e, now);
                 if (v.Mf.sharedMesh != mesh) { v.Mf.sharedMesh = mesh; v.Mr.sharedMaterial = model != null ? model.Mat : unitMat; }
 
                 float cx = e.Cx + e.Ox, cy = e.Cy + e.Oy, z = 0;
@@ -795,7 +801,7 @@ namespace Pit.Game
             {
                 var v = kv.Value;
                 if (v.Seen) continue;
-                if (v.DieT < 0) v.DieT = 0;
+                if (v.DieT < 0) { v.DieT = 0; VfxDeath(v); }
                 v.DieT += Time.unscaledDeltaTime;
                 Models.Clip death;
                 if (v.Clips != null && v.Clips.TryGetValue("Death", out death))

@@ -1,0 +1,10 @@
+{
+    "name": "RicochetVfx.Editor",
+    "rootNamespace": "RicochetVfx.EditorTools",
+    "references": ["RicochetVfx", "Unity.RenderPipelines.Universal.Runtime", "Unity.RenderPipelines.Core.Runtime"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

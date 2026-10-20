@@ -3,6 +3,7 @@
     "rootNamespace": "Pit.Game",
     "references": [
         "Pit.Core",
+        "RicochetVfx",
         "Unity.RenderPipelines.Core.Runtime",
         "Unity.RenderPipelines.Universal.Runtime"
     ],

@@ -166,6 +166,9 @@ namespace UnityEngine
     {
         public Vector3 position, localPosition, localScale = new Vector3(1, 1, 1); public Quaternion rotation, localRotation;
         public void SetParent(Transform p, bool w) { }
+        public Vector3 forward { get { return new Vector3(0, 0, 1); } }
+        public Vector3 TransformPoint(Vector3 p) { return p; }
+        public Vector3 TransformDirection(Vector3 d) { return d; }
     }
     public sealed class GameObject : Object
     {
@@ -262,4 +265,29 @@ namespace UnityEngine
     public static class Debug { public static bool isDebugBuild; public static void Log(object o) { } public static void LogWarning(object o) { System.Console.Error.WriteLine("warning: " + o); } }
     public enum RuntimeInitializeLoadType { AfterSceneLoad, BeforeSceneLoad }
     [System.AttributeUsage(System.AttributeTargets.Method)] public sealed class RuntimeInitializeOnLoadMethodAttribute : System.Attribute { public RuntimeInitializeOnLoadMethodAttribute(RuntimeInitializeLoadType t) { } }
+}
+
+// pit-vfx's RicochetVfx API (Board3D.Vfx.cs), counting calls instead of spawning particles
+namespace RicochetVfx
+{
+    using System.Collections.Generic;
+    using UnityEngine;
+    public sealed class VfxBall { }
+    public sealed class VfxBank
+    {
+        public static VfxBank Instance { get; private set; }
+        public Camera viewCamera;
+        public static int Balls, Stops, Hits, Flashes, Statuses, Chains, Rows, Delays;
+        public static VfxBank Ensure() { return Instance ?? (Instance = new VfxBank()); }
+        public static VfxBall Ball(string id, Transform t) { Balls++; return new VfxBall(); }
+        public static void StopBall(VfxBall b) { Stops++; }
+        public static void Hit(string id, Vector3 p, Vector3 n) { Hits++; }
+        public static void Flash(GameObject go, string id) { Flashes++; }
+        public static void Status(GameObject go, string id, bool on) { Statuses++; }
+        public static void ClearStatus(GameObject go) { }
+        public static void Chain(IList<Vector3> pts, float step = 0.07f) { Chains++; }
+        public static void RowBeam(float rowY, float xMin, float xMax, IList<Vector3> targets = null, float originX = float.NaN) { Rows++; }
+        public static void Delay(float s, System.Action a) { Delays++; a(); }
+        public static void ReleaseAll() { }
+    }
 }

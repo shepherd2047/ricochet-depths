@@ -1,6 +1,8 @@
 // Low-poly units and scenery (style.md §3, §4, §6): flat vertex colours, one main light with soft shadows, a
 // three-colour ambient (sky / equator / ground from _Pit* globals set by Board3D), the pit-axis fog, and the hit feedback:
-// _Flash (white), _Ice (frozen overlay), _Bleed (noise patches seeded per unit). uv.x marks emissive faces, which are
+// _Bleed (noise patches seeded per unit), and pit-vfx's RicochetHitFx (INTEGRATION.md §3): _Flash (white), _HitTint
+// (element tint), _Ice (frozen overlay), _Burn, _Shock, on the _VfxSeed / _VfxTime clock; Board3D and VfxHitFeedback
+// both write them through the renderer's MaterialPropertyBlock. uv.x marks emissive faces, which are
 // pushed over the bloom threshold and tinted by _EmisTint. Written for URP.
 // Delivered models (_Textured = 1) take their colour from _MainTex instead and use uv as texture coordinates; with
 // _TexEmit = 1 their light painted accents (the foes' eyes, seams and flues, there is no emissive map yet) glow in
@@ -20,6 +22,10 @@ Shader "Pit/Unit"
         _EmisMapGain ("Emission map gain", Float) = 0
         _Flash ("Flash", Range(0, 1)) = 0
         _Ice ("Ice", Range(0, 1)) = 0
+        _HitTint ("Hit tint (a = amount)", Color) = (1, 1, 1, 0)
+        _Burn ("Burn", Range(0, 1)) = 0
+        _Shock ("Shock", Range(0, 1)) = 0
+        _VfxSeed ("VFX seed", Float) = 0
         _Bleed ("Bleed", Range(0, 1)) = 0
         _Seed ("Seed", Float) = 0
         _EmisBoost ("Emission boost", Float) = 3
@@ -44,11 +50,13 @@ Shader "Pit/Unit"
             #pragma multi_compile _ _ADDITIONAL_LIGHTS
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "Assets/RicochetVfx/Shaders/RicochetHitFx.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
-                float _Flash, _Ice, _Bleed, _Seed, _EmisBoost, _Textured, _TexEmit, _EmisMapGain;
-                float4 _EmisTint, _EmisColor, _MainTex_ST;
+                float _Flash, _Ice, _Bleed, _Seed, _EmisBoost, _Textured, _TexEmit, _EmisMapGain, _Burn, _Shock, _VfxSeed;
+                float4 _EmisTint, _EmisColor, _MainTex_ST, _HitTint;
             CBUFFER_END
+            float _VfxTime;
             float4 _PitSky, _PitEquator, _PitGround;
             // Pit-axis fog (pit-scene LIGHTING.md): by distance along the pit past the far-wall line (the board's top
             // edge, world y _PitLineY), not by view depth, so tall walls and the floor beyond the line fog alike.
@@ -146,14 +154,9 @@ Shader "Pit/Unit"
             #endif
 
                 float3 view = normalize(_WorldSpaceCameraPos - i.positionWS);
-                float rim = pow(1.0 - saturate(dot(n, view)), 2.0);
-                float3 ice = lerp(float3(0.16, 0.42, 0.5), float3(0.8, 0.98, 0.92), rim) * (0.6 + 0.4 * ndl);
-                col = lerp(col, ice, _Ice * 0.8);
-
                 float3 glow = (_Textured > 0.5 ? emisCol : albedo) * emit * _EmisBoost * _EmisTint.rgb;
                 if (_EmisMapGain > 0) col += SAMPLE_TEXTURE2D(_EmisMap, sampler_EmisMap, i.uv).rgb * _EmisMapGain;
-                col = lerp(col, float3(1, 1, 1), _Flash * 0.85);
-                glow *= 1 - _Flash * 0.85;
+                RicochetHitFx(col, glow, n, view, i.positionOS, ndl, _Flash, _HitTint, _Ice, _Burn, _Shock, _VfxSeed, _VfxTime);
                 float f = PitFog(i.positionWS.y);
                 col = lerp(col, _PitFogColor.rgb, f) + glow * (1 - 0.5 * f);
                 return half4(col, 1);

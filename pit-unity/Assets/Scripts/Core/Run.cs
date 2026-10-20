@@ -55,6 +55,8 @@ namespace Pit.Core
         /// <summary>Sound cues raised since the view last cleared the list.</summary>
         public readonly List<Sfx> Sounds = new List<Sfx>();
         public List<Beam> Beams = new List<Beam>();
+        /// <summary>Direct ball hits on foes since the view last cleared the list (hit VFX); view-only, capped.</summary>
+        public readonly List<BallHit> BallHits = new List<BallHit>();
 
         readonly Dictionary<int, Wave> waves = new Dictionary<int, Wave>();
         int waveSeq, nextId = 1;
@@ -172,6 +174,11 @@ namespace Pit.Core
 
         // ------------------------------------------------------------ fx helpers
         public void Sound(Sfx s) { if (Sounds.Count < 64) Sounds.Add(s); }
+        void RaiseHit(FieldBall b, Enemy e)
+        {
+            if (b.Inst != null && !b.Baby && BallHits.Count < 64)
+                BallHits.Add(new BallHit { Ball = b.Inst.Id, Enemy = e.Id, X = b.X, Y = b.Y, Ex = e.Cx, Ey = e.Cy });
+        }
         public void Text(float x, float y, string s, uint color = 0xffffff, float size = 1)
         {
             if (Texts.Count > 80) Texts.RemoveAt(0);

@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8cce2c27a6254404dadef4aa2ea908c8, type: 3}
+  m_Name: VfxBank
+  m_EditorClassIdentifier: RicochetVfx::RicochetVfx.VfxBankAsset
+  elements:
+  - element: 0
+    ball: {fileID: 6200935373484137779, guid: 8efc06cae301a4353acae9ae8d1c50b8, type: 3}
+    hit: {fileID: 8268582914947918660, guid: 43c4c73f94d1246928a188698f7d8dc1, type: 3}
+    status: {fileID: 6274650007108844742, guid: 016aa13e38ab24e26a6337c240fa0911, type: 3}
+    statusEnd: {fileID: 0}
+  - element: 1
+    ball: {fileID: 3950689344770525507, guid: 5105af137ccf8422fbbe135d6241b161, type: 3}
+    hit: {fileID: 7200201228731317904, guid: e8f427661a62e470296ee77e07b6fedf, type: 3}
+    status: {fileID: 4162666730665813626, guid: 73bfb6e092a9d4e5c92d50642fec4cd1, type: 3}
+    statusEnd: {fileID: 9151702367025428605, guid: 2dd5de419bbf2432d982ba6cddfd4111, type: 3}
+  - element: 2
+    ball: {fileID: 1584119659814512007, guid: 9e49f30e7f9bd4301a7b25ccd61f71ad, type: 3}
+    hit: {fileID: 3956398960232096357, guid: 225877dc5cd3f4e60aa75d98158e9deb, type: 3}
+    status: {fileID: 0}
+    statusEnd: {fileID: 0}
+  - element: 3
+    ball: {fileID: 5041876042461625807, guid: 46dbb15c1f9ad422b8312d9d7b18738e, type: 3}
+    hit: {fileID: 7728719880805429389, guid: aec972e4c335445bc81118a4247c8570, type: 3}
+    status: {fileID: 0}
+    statusEnd: {fileID: 0}
+  chainBolt: {fileID: 5234799430178799058, guid: 1666b87c30bad4d7bb5ec92f0a38027c, type: 3}
+  rowBeam: {fileID: 3724462859389474845, guid: 296b9f0decfe1408e8416b6e3c59f589, type: 3}
+  rowHit: {fileID: 384800187088472870, guid: 83ac8725388c345e0b4eccdab97ca64e, type: 3}
+  ballSize: 0.5

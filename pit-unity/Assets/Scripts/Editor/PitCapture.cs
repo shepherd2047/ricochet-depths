@@ -3,6 +3,8 @@
 //     [-pitScreen hud|title|heroes|levelup|crucible|pause|end|revive|ad|crucibleplus|clips] [-pitW 1080 -pitH 1920] [-pitFinal] [-pitRec 4]
 // -pitScreen clips renders every baked frame of the hero's clips (Models.Clip) as a sheet, one clip per row; with
 // -pitHero enemy_<key> it renders that foe model's clips instead.
+// -pitBall ember|frost|spark|ray (RicochetVfx): every ball the run owns becomes that ball, the VFX clock is ticked by hand
+// at 60 fps from the shot turn on, and the shot waits for that ball's effect (a burn, a freeze, a chain, a row laser).
 // -pitRec s plays on for s more seconds after the shot and writes a 10 fps frame sequence next to it (out_000.png ...).
 // -pitFinal keeps the hero alive and stops once the final boss has been on the board for -pitAfter seconds (default 0),
 // i.e. with the gate docked.
@@ -97,6 +99,13 @@ namespace Pit.EditorTools
             Debug.Log("PitCapture: " + path);
         }
 
+        /// <summary>-pitBall: every owned ball (not fused ones) becomes the given ball at its level.</summary>
+        static void OnlyBall(Pit.Core.Run r, string id)
+        {
+            foreach (var ob in r.Balls)
+                if (ob.Id != id && ob.Fused == null) { ob.Id = id; ob.Stats = Pit.Core.Run.BallStats(id, ob.Level); }
+        }
+
         public static void Run()
         {
             string path = Arg("-pitShot", "Builds/shot.png"), heroId = Arg("-pitHero", "tinker");
@@ -136,6 +145,8 @@ namespace Pit.EditorTools
 
                 bool adShot = which == "revive" || which == "ad";
                 var r = new Pit.Core.Run(1234, heroId) { AdsOn = adShot };
+                string vfxBall = Arg("-pitBall", null);
+                if (vfxBall != null) { RicochetVfx.VfxBank.Ensure().manualTick = true; OnlyBall(r, vfxBall); }
                 bool final = Arg("-pitFinal", null) != null;
                 float after = float.Parse(Arg("-pitAfter", "0"), System.Globalization.CultureInfo.InvariantCulture), finalAt = 0;
                 while (!r.IsOver && r.Time < 3000)
@@ -152,9 +163,31 @@ namespace Pit.EditorTools
                     if ((which == "crucible" || which == "crucibleplus") && ready && r.Mode == Mode.Fuser) break;
                     if (adShot && r.Mode == Mode.Revive) break;
                     if (which != "end" && !adShot && which != "levelup" && which != "crucible" && which != "crucibleplus" && ready && r.Mode == Mode.Playing) break;
-                    if (r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser) { Bot.AutoPick(r); continue; }
+                    if (r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser) { Bot.AutoPick(r); if (vfxBall != null) OnlyBall(r, vfxBall); continue; }
                     Bot.Drive(r);
                     r.Step(1 / 60f);
+                }
+                if (vfxBall != null)
+                {
+                    // play on with the board drawn every step until the ball's effect has been on screen for a moment
+                    int wait = vfxBall == "ember" ? 6 : vfxBall == "frost" ? 10 : vfxBall == "spark" ? 4 : 14, since = -1, seen = 0;
+                    for (int f = 0; f < 60 * 20 && !r.IsOver; f++)
+                    {
+                        if (r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser) { Bot.AutoPick(r); OnlyBall(r, vfxBall); continue; }
+                        if (r.Mode != Mode.Playing) break;
+                        Bot.Drive(r); r.Step(1 / 60f);
+                        gfx.Time = r.Time; gfx.Begin(w, h, scale); ui.BeginFrame();
+                        world.Layout(r, screens.HudTop, screens.HudBottom); board.Frame(r, world, gfx); world.Draw(r);
+                        ui.EndFrame(); gfx.End();
+                        RicochetVfx.VfxBank.Instance.Tick(1 / 60f);
+                        int n = vfxBall == "ember" ? (board.VfxBurning > 0 ? board.VfxHitCount : seen) : vfxBall == "frost" ? (board.VfxFrozen > 0 ? board.VfxHitCount : seen)
+                              : vfxBall == "spark" ? (board.VfxChainHops >= 2 ? board.VfxChainCount : seen) : board.VfxRowCount;
+                        // events in the first second do not count: the trails need that long to fill in
+                        if (n != seen) { seen = n; since = f >= 60 ? 0 : -1; }
+                        else if (since >= 0 && ++since >= wait) break;
+                    }
+                    Debug.Log("PitCapture: vfx " + vfxBall + " hits " + board.VfxHitCount + " chains " + board.VfxChainCount + " rows " + board.VfxRowCount +
+                              " burning " + board.VfxBurning + " frozen " + board.VfxFrozen);
                 }
                 if (which == "pause") r.Pause();
                 if (which == "crucibleplus") r.FuserAdUpgrade();
@@ -197,6 +230,7 @@ namespace Pit.EditorTools
                         if (r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser) Bot.AutoPick(r);
                         else { Bot.Drive(r); r.Step(1 / 60f); }
                     }
+                    if (vfxBall != null) RicochetVfx.VfxBank.Instance.Tick(0.1f);
                     gfx.Time = r.Time;
                     gfx.Begin(w, h, scale);
                     ui.BeginFrame();

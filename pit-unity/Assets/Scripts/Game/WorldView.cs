@@ -100,7 +100,7 @@ namespace Pit.Game
             g.Z = ZShot;
             foreach (var sh in r.Shots) DrawShotSprite(sh);
             g.Z = ZBall;
-            foreach (var b in r.Field) DrawBallSprite(b);
+            foreach (var b in r.Field) if (!Board3D.HasVfx(b)) DrawBallSprite(b);   // the four RicochetVfx balls: Board3D.Vfx
 
             g.Z = ZMark;
             foreach (var e in r.Enemies) if (!e.Dead) DrawRaisedMarks(r, e);
@@ -692,6 +692,7 @@ namespace Pit.Game
 
         void DrawBeam(Run r, Beam bm)
         {
+            if (Units3D && (bm.Kind == BeamKind.Arc || bm.Kind == BeamKind.Row) && Board3D.HasVfx(bm.Src)) return;   // RicochetVfx bolt / laser
             var c = Col.Hex(bm.Color, Mathf.Min(1, bm.T * 5));
             switch (bm.Kind)
             {

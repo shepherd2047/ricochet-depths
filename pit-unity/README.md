@@ -68,6 +68,14 @@ The simulation is still 2D. The look follows style.md:
   - Each element has a 64-step ramp from very dark to near white.
   - Numbers on the board use a 3×5 pixel font.
 - **Bloom.** Balls, shots, beams and particles sit on the `Glow` layer, drawn ×2.4 in HDR. Bloom's threshold (1.05) is reached only by that layer and emissive eyes.
+- **Ball VFX (pit-vfx).** Ember, Rime (`frost`), Spark and Ray use `Assets/RicochetVfx`, imported unchanged from `pit-vfx/RicochetVfx.unitypackage` (565a1f3; it needs the Particle System module, now in the manifest). `Board3D.Vfx.cs` makes the calls from what the core reports:
+  - a proxy transform per field ball for `VfxBank.Ball`, and `StopBall` when the ball leaves the field;
+  - `Run.BallHits` for `Hit` plus `Flash`;
+  - the `burn` and `freeze` statuses for `Status`, only when one of these balls put them on (a Cinderquake or Hailstorm status keeps the plain look); a frozen foe's baked clip holds still under the ice shell; statuses end when the foe dies and `ClearStatus` runs when its view is pooled;
+  - the core's arc beams for `Chain`, flashing each target 0.07 s apart, and its row beam for `RowBeam` at the inner wall faces, flashing the row 0.14 s later;
+  - `Beam.Src`, `Target` and `Targets` tag what made each beam.
+
+  WorldView skips those balls' sprites, trails and beams. The other 22 balls are unchanged. `PitUnit` includes `RicochetHitFx.hlsl` from the package for `_Flash`, `_HitTint`, `_Ice`, `_Burn` and `_Shock`, replacing its own flash and ice. The hero and other freezes use the same code, so their ice now has a faint rim glow. `PitCapture -pitBall <id>` gives the run only that ball, ticks the VFX clock by hand and waits for the effect before the shot. WebGL build: 7.22 → 7.50 MiB (+247 KiB wasm for the Particle System module, +35 KiB data).
 - **UI.** The UI stays on its own orthographic camera, stacked on top as a URP overlay.
 
 ## Ads (from `../ballpit-spec/ads.md`)

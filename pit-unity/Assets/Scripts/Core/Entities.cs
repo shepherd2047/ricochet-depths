@@ -133,7 +133,15 @@ namespace Pit.Core
         public BeamKind Kind;
         public float X1, Y1, X2, Y2, X, Y, R, W, T;
         public uint Color;
+        // view-only: the ball that made it (Content id), the foe an arc ends on, the foes a row beam hit
+        public string Src;
+        public int Target = -1;
+        public List<int> Targets;
+        public bool Shown;
     }
+
+    /// <summary>A direct ball hit (view-only, for hit VFX): ball id, foe id, the ball's and the foe's centre.</summary>
+    public struct BallHit { public string Ball; public int Enemy; public float X, Y, Ex, Ey; }
 
     public sealed class Wave
     {
