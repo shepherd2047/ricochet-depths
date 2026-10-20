@@ -96,7 +96,8 @@ namespace Pit.Game
         // the layered rig (HeroRig): body yaw (game degrees, 90 = up the board), one walk clock, the last Shoot kick
         HeroRig heroRig, previewRig;
         float bodyAim = 90, walkT, shootAt = -9, deadAt;
-        int heroLaunches, heroTick = -1, previewTick = -1;
+        int heroLaunches, heroTick = -1, previewTick = -1, muzzleBone = -1;
+        static int softCell = -2;
 
         // camera basis and lens of the last fitted frame, for ScreenToBoard
         Vector3 camPos, camRight = Vector3.right, camUp = Vector3.up, camFwd = Vector3.forward;
@@ -288,6 +289,7 @@ namespace Pit.Game
             Units(r);
             Vfx(r);
             Hero(r);
+            MuzzleFlash(g);
             AimOverlay(r, wv, g);
         }
 
@@ -929,6 +931,7 @@ namespace Pit.Game
                 heroModel = model;
                 heroRig = model != null && model.Rig != null ? new HeroRig(model.Rig) : null;
                 heroTick = -1;
+                muzzleBone = heroRig != null ? heroRig.D.Bone("Muzzle") : -1;
                 hero.Mf.sharedMesh = heroRig != null ? heroRig.Mesh : model != null ? model.Mesh : Models.Hero(r.Hero.Id, r.Hero.Color);
                 hero.Mr.sharedMaterial = model != null ? model.Mat : unitMat;
                 // the hero is drawn 1.8 cells tall at 7x9, scaled by its height only; the hit circle (P.R) stays gameplay-only
@@ -996,7 +999,7 @@ namespace Pit.Game
             string full = r.Mode == Mode.Dying || r.Mode == Mode.GameOver ? "Death" :
                 r.Mode == Mode.Victory || r.Mode == Mode.Clearing && r.Won ? "Victory" : null;
             if (full != heroClip) { heroClip = full; deadAt = heroT; }
-            if (r.Launches != heroLaunches) { heroLaunches = r.Launches; if (heroT - shootAt >= 0.1f) shootAt = heroT; }
+            if (r.Launches != heroLaunches) { heroLaunches = r.Launches; if (heroT - shootAt >= 0.199f) shootAt = heroT; }
             // body yaw: keep the aim within the upper body's ±35°, then drift toward it
             float off = Mathf.DeltaAngle(bodyAim, p.Aim);
             if (Mathf.Abs(off) > 35) bodyAim = p.Aim - Mathf.Sign(off) * 35;
@@ -1031,6 +1034,29 @@ namespace Pit.Game
             heroRig.Skin();
             return true;
         }
+        /// <summary>
+        /// A muzzle flash at the rig's Muzzle bone (pit-art bf59088) for the 0.1 s step of each Shoot start: a warm soft glow
+        /// and a white core on the Glow layer, raised to the muzzle's height, so the bloom picks it up.
+        /// </summary>
+        void MuzzleFlash(Gfx g)
+        {
+            if (heroRig == null || muzzleBone < 0 || heroClip != null) return;
+            float age = Mathf.Floor(heroT * AnimFps) / AnimFps - Mathf.Floor(shootAt * AnimFps) / AnimFps;
+            if (age < 0 || age >= 0.1f) return;
+            if (softCell == -2) softCell = PixelArt.CellOf("soft");
+            var wp = hero.Body.transform.TransformPoint(heroRig.BonePos(muzzleBone));
+            var lp = WorldRoot.InverseTransformPoint(wp);
+            // 1 cell across, in design units (WorldRoot scales design units by q into the board's world units)
+            float size = 1f * Run.CELL * K * HeroGrow / Mathf.Max(1e-4f, WorldRoot.localScale.x);
+            var keep = g.Cur; float kz = g.Z;
+            g.Cur = Layer.Glow; g.Z = lp.z;
+            float x = lp.x - g.Ox, y = -lp.y - g.Oy;
+            g.Sprite(softCell, x, y, size, new Color32(255, 170, 70, 255));
+            g.Sprite(softCell, x, y, size * 0.55f, new Color32(255, 230, 160, 255));
+            g.Sprite(softCell, x, y, size * 0.25f, Color.white);
+            g.Cur = keep; g.Z = kz;
+        }
+
         static readonly string[] Walks = { "WalkForward", "StrafeRight", "WalkBack", "StrafeLeft" };
 
         bool HeroAnimate(Run r, float drive)

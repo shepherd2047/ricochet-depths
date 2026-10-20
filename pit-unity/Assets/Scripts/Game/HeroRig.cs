@@ -29,13 +29,15 @@ namespace Pit.Game
         public sealed class Data
         {
             public int Bones, Verts; public float Fps;
-            public int[] Parent; public bool[] Upper;
+            public int[] Parent; public bool[] Upper; public string[] Names;
             public float[] Rel, InvRest;       // 12 floats per bone: inv(rest parent) * rest (rest for the root), inv(rest)
             public float[] P, N, W; public byte[] B;   // rest positions / normals (3 per vertex), 4 bones + weights per vertex
             public Dictionary<string, Clip> Clips = new Dictionary<string, Clip>();
             public List<Vector2> Uv; public List<Color32> Col; public List<int> Tri;
             public float S; public string Name;
             public bool Has(string clip) { return Clips.ContainsKey(clip); }
+            /// <summary>The bone's index, or -1.</summary>
+            public int Bone(string name) { return System.Array.IndexOf(Names, name); }
         }
 
         /// <summary>Loads Resources/Models/&lt;name&gt;_rig.bytes for a rest mesh of uv.Count vertices; null when absent.</summary>
@@ -49,11 +51,11 @@ namespace Pit.Game
             d.Bones = I(b, 4); d.Verts = I(b, 8); d.Fps = F(b, 12);
             if (d.Verts != uv.Count) { Debug.LogWarning("HeroRig: " + name + "_rig has " + d.Verts + " vertices, the mesh " + uv.Count); return null; }
             int o = 16, nb = d.Bones, nv = d.Verts;
-            d.Parent = new int[nb]; d.Upper = new bool[nb];
+            d.Parent = new int[nb]; d.Upper = new bool[nb]; d.Names = new string[nb];
             var rest = new float[nb * 12];
             for (int i = 0; i < nb; i++)
             {
-                o += 1 + b[o];   // name, unused at runtime
+                d.Names[i] = System.Text.Encoding.ASCII.GetString(b, o + 1, b[o]); o += 1 + b[o];
                 d.Parent[i] = I(b, o); d.Upper[i] = b[o + 4] != 0; o += 5;
                 for (int k = 0; k < 12; k++, o += 4) rest[i * 12 + k] = F(b, o);
             }
@@ -142,6 +144,10 @@ namespace Pit.Game
             aim = Mathf.Clamp(aim, -1, 1);
             Set(Part.Upper, clipBase + "_F", t, clipBase + (aim < 0 ? "_L" : "_R"), t, Mathf.Abs(aim));
         }
+
+        /// <summary>The bone's head in the posed mesh's space (as of the last Skin), and its +y axis (Blender's bone axis).</summary>
+        public Vector3 BonePos(int i) { int m = i * 12; return new Vector3(D.S * world[m + 3], D.S * world[m + 7], -world[m + 11]); }
+        public Vector3 BoneAxis(int i) { int m = i * 12; return new Vector3(D.S * world[m + 1], D.S * world[m + 5], -world[m + 9]); }
 
         /// <summary>FK over the bones, then linear-blend skinning of the bind pose into Mesh.</summary>
         public void Skin() { Write(false); }

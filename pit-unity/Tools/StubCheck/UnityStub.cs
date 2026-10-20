@@ -170,7 +170,7 @@ namespace UnityEngine
         public Vector3 position, localPosition, localScale = new Vector3(1, 1, 1); public Quaternion rotation, localRotation;
         public void SetParent(Transform p, bool w) { }
         public Vector3 forward { get { return new Vector3(0, 0, 1); } }
-        public Vector3 TransformPoint(Vector3 p) { return p; }
+        public Vector3 TransformPoint(Vector3 p) { return p; } public Vector3 InverseTransformPoint(Vector3 p) { return p; }
         public Vector3 TransformDirection(Vector3 d) { return d; }
     }
     public sealed class GameObject : Object
