@@ -114,7 +114,7 @@ namespace Pit.Game
         /// A rewarded-ad button: the play icon marks it as an ad, the label sits right of it. Greyed with "Ad not
         /// available" under it when no ad can load (ads.md §3).
         /// </summary>
-        bool AdBtn(string id, string placement, float x, float y, float w, float h, string label, float pt, bool primary = false)
+        bool AdBtn(string id, string placement, float x, float y, float w, float h, string label, float pt, bool primary = false, bool noteLeft = false)
         {
             bool ready = Ads != null && Ads.RewardedReady(placement);
             bool held = ready && ui.Held(id);
@@ -122,7 +122,8 @@ namespace Pit.Game
             float dy = held ? 2 * A : 0, cy = y + (h - 2 * A) / 2 + dy;
             g.SkinAt("ic_play", x + 4 * A, cy - 8 * A, 1, ready ? Col.White : Col.A(Col.White, 0.4f));
             T(label, x + 20 * A, cy - (h - 2 * A) / 2, w - 22 * A, h - 2 * A, pt, ready ? Cream : Faint, Align.Center, true);
-            if (!ready) T("Ad not available", x - 20 * A, y + h + A, w + 40 * A, 9 * A, 9, Faint);
+            if (!ready && noteLeft) T("Ad not available", x - 64 * A, y + (h - 9 * A) / 2, 62 * A, 9 * A, 9, Faint, Align.Right);
+            else if (!ready) T("Ad not available", x - 20 * A, y + h + A, w + 40 * A, 9 * A, 9, Faint);
             return hit && ready;
         }
 
@@ -391,17 +392,16 @@ namespace Pit.Game
         }
 
         /// <summary>A crucible option card (UI-SPEC §7.4); an unavailable one is greyed and takes no taps.</summary>
-        /// <summary>compact: the four-card crucible (ads.md R3), 40 px cards at a 41 px pitch.</summary>
-        bool Option(string id, int row, string title, string desc, bool on, System.Action<float, float> icons, bool compact = false)
+        bool Option(string id, int row, string title, string desc, bool on, System.Action<float, float> icons, int lines = 3)
         {
-            float h = compact ? 40 : 52, cx = X(10), cy = MY(66 + (compact ? 41 : 54) * row), sh = compact ? -6 * A : 0;
-            g.Skin(on ? "card_copper" : "card_disabled", cx, cy, 160 * A, h * A, Col.White);
-            if (on && ui.Held(id)) g.Skin("select", cx - 2 * A, cy - 2 * A, 164 * A, (h + 4) * A, Col.White);
-            g.Skin("inset", cx + 6 * A, cy + (h - 36) / 2 * A, 62 * A, 36 * A, Col.White);
-            if (icons != null) icons(cx, cy + sh);
-            T(title, cx + 74 * A, cy + (compact ? 4 : 7) * A, 80 * A, 12 * A, 13, on ? Cream : Faint, Align.Left, true);
-            Para(desc, cx + 74 * A, cy + (compact ? 16 : 21) * A, 80 * A, 10, on ? Body : Faint, compact ? 2 : 3);
-            return ui.Area(id, cx, cy, 160 * A, h * A, 0, !on);
+            float cx = X(10), cy = MY(66 + 54 * row);
+            g.Skin(on ? "card_copper" : "card_disabled", cx, cy, 160 * A, 52 * A, Col.White);
+            if (on && ui.Held(id)) g.Skin("select", cx - 2 * A, cy - 2 * A, 164 * A, 56 * A, Col.White);
+            g.Skin("inset", cx + 6 * A, cy + 10 * A, 62 * A, 36 * A, Col.White);
+            if (icons != null) icons(cx, cy);
+            T(title, cx + 74 * A, cy + 7 * A, 80 * A, 12 * A, 13, on ? Cream : Faint, Align.Left, true);
+            Para(desc, cx + 74 * A, cy + 21 * A, 80 * A, 10, on ? Body : Faint, lines);
+            return ui.Area(id, cx, cy, 160 * A, 52 * A, 0, !on);
         }
 
         void Lock(float cx, float cy) { g.SkinAt("ic_lock", cx + 29 * A, cy + 20 * A, 1, Col.A(Col.White, 0.5f)); }
@@ -416,13 +416,18 @@ namespace Pit.Game
                 OwnedBall[] first = null; int pairCount = 0;
                 foreach (var p in pairs) if (p[0].Uid < p[1].Uid) { pairCount++; if (first == null) first = p; }
                 var recs = r.EvolveRecipes();
-                bool four = m.ExtraFree > 0;
-                if (Option("fz-free", 0, "FREE UPGRADES", "Level up 1-5 of your balls and items at random.", true, (cx, cy) =>
+                // ads.md R3: "+1" on the Free Upgrades card adds a piece (count 2-5), once per Crucible, while anything can level
+                bool adPlus = Ads != null && !m.ExtraAdUsed && AdCfg.ExtraCardsPerCrucible > 0 && r.FuserCanUpgrade();
+                string freeTitle = m.FreeBonus > 0 ? "FREE UPGRADES +1" : "FREE UPGRADES";
+                string freeDesc = "Level up " + (1 + m.FreeBonus) + "-5 of your balls and items at random.";
+                if (Option("fz-free", 0, freeTitle, freeDesc, true, (cx, cy) =>
                 {
                     int n = 0;
                     foreach (var b in r.Balls) { if (n >= 3) break; if (b.Fused == null && b.Level < 3) BallIcon(b.Id, cx + (13 + 16 * n++) * A, cy + 20 * A, 16 * A); }
                     foreach (var it in r.Items) { if (n >= 3) break; if (it.Level < 3) ItemIcon(it.Id, cx + (13 + 16 * n++) * A, cy + 20 * A, 16 * A); }
-                }, four)) { r.FuserFree(); return; }
+                }, adPlus ? 2 : 3)) { r.FuserFree(); return; }
+                if (adPlus && AdBtn("ad-plus", AdConfig.Crucible, X(10) + 112 * A, MY(66) + 34 * A, 42 * A, 15 * A, "+1", 11, noteLeft: true))
+                    Ads.ShowRewarded(AdConfig.Crucible, ok => { if (ok && r.Mode == Mode.Fuser && r.Menu == m) r.FuserAdUpgrade(); });
                 if (Option("fz-combo", 1, "COMBINE", pairCount > 0 ? "Merge two Lv 3 balls. The result stops levelling." : "Needs two Lv 3 balls that can merge.",
                     pairCount > 0, (cx, cy) =>
                 {
@@ -430,26 +435,16 @@ namespace Pit.Game
                     BallIcon(first[0].Id, cx + 17 * A, cy + 20 * A, 16 * A);
                     g.SkinAt("ic_plus", cx + 31 * A, cy + 20 * A, 1, Col.White);
                     BallIcon(first[1].Id, cx + 42 * A, cy + 20 * A, 16 * A);
-                }, four)) { m.View = FuserView.Combo; m.Host = null; partner = null; return; }
+                })) { m.View = FuserView.Combo; m.Host = null; partner = null; return; }
                 string evoDesc = "No recipe ready. Max the right pieces first.";
                 if (recs.Count > 0) evoDesc = RecipeParts(recs[0]) + " become " + RecipeName(recs[0]) + "." + (recs.Count > 1 ? " (+" + (recs.Count - 1) + " more)" : "");
                 if (Option("fz-evo", 2, "EVOLVE", evoDesc, recs.Count > 0, (cx, cy) =>
                 {
                     if (recs.Count == 0) { Lock(cx, cy); return; }
                     RecipeIcons(recs[0], cx, cy);
-                }, four)) { m.View = FuserView.Evo; return; }
-                // ads.md R3: the ad's 4th card, Free Upgrades rolled again with its count shown
-                if (four && Option("fz-extra", 3, m.ExtraFree + " FREE UPGRADE" + (m.ExtraFree > 1 ? "S" : ""),
-                    "Bonus roll: level up " + m.ExtraFree + " of your balls and items at random.", true, (cx, cy) =>
-                {
-                    g.SkinAt("ic_play", cx + 13 * A, cy + 20 * A, 1, Col.White);
-                    g.SkinAt("ic_plus", cx + 31 * A, cy + 20 * A, 1, Col.White);
-                }, true)) { r.FuserFree(m.ExtraFree); return; }
+                })) { m.View = FuserView.Evo; return; }
                 bool canFuse = pairCount > 0 || recs.Count > 0;
-                bool adCard = Ads != null && !m.ExtraAdUsed && !four && AdCfg.ExtraCardsPerCrucible > 0;
-                if (adCard && AdBtn("ad-card", AdConfig.Crucible, X(8), MY(232), 74 * A, 24 * A, "+1 OPTION", 11))
-                    Ads.ShowRewarded(AdConfig.Crucible, ok => { if (ok && r.Mode == Mode.Fuser && r.Menu == m) { m.ExtraAdUsed = true; r.FuserExtraCard(); } });
-                if (Btn("fz-skip", X(adCard ? 86 : 46), MY(232), (adCard ? 80 : 88) * A, 24 * A, "SKIP", 13, cost: canFuse ? "+50" : null)) { r.FuserAbandon(); return; }
+                if (Btn("fz-skip", X(46), MY(232), 88 * A, 24 * A, "SKIP", 13, cost: canFuse ? "+50" : null)) { r.FuserAbandon(); return; }
             }
             else if (m.View == FuserView.Combo) Combine(r, m);
             else if (m.View == FuserView.Evo)

@@ -874,8 +874,9 @@ namespace Pit.Game
             }
             var p = r.P;
             float st = Step(r.Time);
-            bool moving = r.InputX != 0 || r.InputY != 0;
-            bool animated = heroModel != null && heroModel.Clips != null && HeroAnimate(r, moving);
+            float drive = Mathf.Sqrt(r.InputX * r.InputX + r.InputY * r.InputY);
+            bool moving = drive > 0;
+            bool animated = heroModel != null && heroModel.Clips != null && HeroAnimate(r, drive);
             // the procedural stand-in (no baked clips) bobs and leans instead
             float bob = animated ? 0 : moving ? 0.06f * Mathf.Abs(Mathf.Sin(st * 9)) : (Mathf.Repeat(st, 1) >= 0.5f ? 0.03f : 0);
             float size = p.R * 2 * K * 1.15f;
@@ -894,10 +895,14 @@ namespace Pit.Game
 
         /// <summary>
         /// Picks the hero's clip (Death on dying and game over, Victory once the final boss falls, Hit for a moment after
-        /// each hurt, Shoot while a volley is out, Walk while moving, else Idle) and shows its stepped frame. The clip
+        /// each hurt, Run while moving (Walk for a short joystick push, or when there is no Run), Shoot while a volley is
+        /// out and the hero stands, else Idle) and shows its stepped frame. The clip
         /// clock follows the sim's time, so pauses and game speed carry over, and real time once the run is over.
         /// </summary>
-        bool HeroAnimate(Run r, bool moving)
+        /// <summary>The hero's drawn bounds in world units (1 unit = 1 cell), for the size check in PitCapture.</summary>
+        public Bounds HeroBounds { get { return hero != null ? hero.Mr.bounds : new Bounds(); } }
+
+        bool HeroAnimate(Run r, float drive)
         {
             var clips = heroModel.Clips;
             if (r != heroRun) { heroRun = r; heroT = 0; heroLastTime = r.Time; heroClip = null; heroHitAt = -9; heroLastHurt = 0; }
@@ -912,8 +917,8 @@ namespace Pit.Game
                 r.Mode == Mode.Dying || r.Mode == Mode.GameOver ? "Death" :
                 r.Mode == Mode.Victory || r.Mode == Mode.Clearing && r.Won ? "Victory" :
                 clips.TryGetValue("Hit", out c) && heroT - heroHitAt < c.Length ? "Hit" :
-                r.Volley != null ? "Shoot" :
-                moving ? "Walk" : "Idle";
+                drive > 0 ? (drive >= 0.5f && clips.ContainsKey("Run") ? "Run" : "Walk") :
+                r.Volley != null ? "Shoot" : "Idle";
             if (!clips.TryGetValue(want, out c)) { want = "Idle"; if (!clips.TryGetValue(want, out c)) return false; }
             if (want == "Hit" && heroClip == "Hit" && heroHitAt > heroClipAt) heroClipAt = heroHitAt;   // hit again: restart
             if (want != heroClip) { heroClip = want; heroClipAt = want == "Hit" ? heroHitAt : heroT; }

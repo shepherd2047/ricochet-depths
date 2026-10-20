@@ -95,7 +95,7 @@ static class Smoke
                                 if (r.ComboPairs().Count > 0) { r.Menu.View = FuserView.Combo; frame(() => screens.Menus(r)); r.Menu.Host = r.ComboPairs()[0][0]; frame(() => screens.Menus(r)); r.Menu.Host = null; }
                                 if (r.EvolveRecipes().Count > 0) { r.Menu.View = FuserView.Evo; frame(() => screens.Menus(r)); }
                                 r.Menu.View = FuserView.Main;
-                                if (r.AdsOn) { r.FuserExtraCard(); frame(() => screens.Menus(r)); r.Menu.ExtraFree = 0; }
+                                if (r.AdsOn) { frame(() => screens.Menus(r)); r.FuserAdUpgrade(); frame(() => screens.Menus(r)); }
                             }
                             Bot.AutoPick(r);
                             if (r.Menu != null && r.Menu.View == FuserView.Result) frame(() => screens.Menus(r));

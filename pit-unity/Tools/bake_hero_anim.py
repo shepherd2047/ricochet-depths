@@ -13,7 +13,7 @@
 import bpy, sys, os, struct, math
 a = sys.argv[sys.argv.index("--")+1:]; src, dst = a[0], a[1]
 FPS = float(a[2]) if len(a) > 2 else 10
-LOOP = {"Idle": True, "Walk": True, "Move": True, "Shoot": False, "Attack": False, "Hit": False, "Death": False, "Victory": True}
+LOOP = {"Idle": True, "Walk": True, "Run": True, "Move": True, "Shoot": False, "Attack": False, "Hit": False, "Death": False, "Victory": True}
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=src)
@@ -23,7 +23,7 @@ o = [o for o in scn.objects if o.type == 'MESH' and o.parent == arm][0]
 ad = arm.animation_data
 for t in ad.nla_tracks: t.mute = True
 name = os.path.splitext(os.path.basename(src))[0]
-ORDER = [c for c in ["Idle", "Walk", "Move", "Shoot", "Attack", "Hit", "Death", "Victory"] if c in bpy.data.actions]
+ORDER = [c for c in ["Idle", "Walk", "Run", "Move", "Shoot", "Attack", "Hit", "Death", "Victory"] if c in bpy.data.actions]
 KEYED = "Move" in ORDER   # monster_lib clips
 
 def sample():

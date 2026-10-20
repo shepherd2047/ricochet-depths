@@ -177,7 +177,7 @@ namespace Pit.Core
         public string Title;
         public List<ResultLine> Results;
         /// <summary>Crucible R3 (ads.md): the ad's 4th card, a second Free Upgrades roll of this many pieces (0 = none).</summary>
-        public int ExtraFree;
+        public int FreeBonus;      // ads.md R3: +1 Free Upgrades piece from a watched ad
         public bool ExtraAdUsed;
     }
 

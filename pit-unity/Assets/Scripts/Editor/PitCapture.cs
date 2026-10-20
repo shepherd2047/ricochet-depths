@@ -1,6 +1,6 @@
 // Command line (needs graphics, so no -nographics):
 //   Unity -batchmode -quit -projectPath . -executeMethod Pit.EditorTools.PitCapture.Run -pitShot out.png [-pitTurn 12] [-pitHero tinker]
-//     [-pitScreen hud|title|heroes|levelup|crucible|pause|end|revive|ad|crucible4|clips] [-pitW 1080 -pitH 1920] [-pitFinal] [-pitRec 4]
+//     [-pitScreen hud|title|heroes|levelup|crucible|pause|end|revive|ad|crucibleplus|clips] [-pitW 1080 -pitH 1920] [-pitFinal] [-pitRec 4]
 // -pitScreen clips renders every baked frame of the hero's clips (Models.Clip) as a sheet, one clip per row; with
 // -pitHero enemy_<key> it renders that foe model's clips instead.
 // -pitRec s plays on for s more seconds after the shot and writes a 10 fps frame sequence next to it (out_000.png ...).
@@ -149,15 +149,15 @@ namespace Pit.EditorTools
                     }
                     bool ready = r.Turn >= turn && r.Balls.Count > 0;
                     if (which == "levelup" && ready && r.Mode == Mode.LevelUp) break;
-                    if ((which == "crucible" || which == "crucible4") && ready && r.Mode == Mode.Fuser) break;
+                    if ((which == "crucible" || which == "crucibleplus") && ready && r.Mode == Mode.Fuser) break;
                     if (adShot && r.Mode == Mode.Revive) break;
-                    if (which != "end" && !adShot && which != "levelup" && which != "crucible" && which != "crucible4" && ready && r.Mode == Mode.Playing) break;
+                    if (which != "end" && !adShot && which != "levelup" && which != "crucible" && which != "crucibleplus" && ready && r.Mode == Mode.Playing) break;
                     if (r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser) { Bot.AutoPick(r); continue; }
                     Bot.Drive(r);
                     r.Step(1 / 60f);
                 }
                 if (which == "pause") r.Pause();
-                if (which == "crucible4") r.FuserExtraCard();
+                if (which == "crucibleplus") r.FuserAdUpgrade();
                 // the placeholder 0.8 s into its 2 s countdown, over the revive prompt that opened it
                 if (which == "ad") { ads.Now = 0; ads.ShowRewarded(AdConfig.Revive, ok => { }); ads.Now = 0.8f; }
                 // two frames, so eased bars and the lag bar settle and the preview camera has its target
@@ -181,6 +181,9 @@ namespace Pit.EditorTools
                     gfx.End();
                 }
                 board.RenderPreview();
+                var hb = board.HeroBounds;
+                Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "PitCapture: board {0}x{1}, hero drawn {2:F2} cells wide, {3:F2} deep, {4:F2} tall", r.Cols, r.Rows, hb.size.x, hb.size.y, hb.size.z));
 
                 System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path)));
                 Shot(board.Cam, W, H, path);

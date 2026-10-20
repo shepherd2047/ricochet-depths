@@ -221,20 +221,28 @@ namespace Pit.Core
             return M.Clamp(n, 1, 5);
         }
 
-        /// <summary>Crucible R3 (ads.md): reveals a 4th card, Free Upgrades rolled again under the same rules, count shown.</summary>
-        public void FuserExtraCard()
+        /// <summary>True when Free Upgrades has something to level (else it pays the 75–150 gold fallback).</summary>
+        public bool FuserCanUpgrade()
         {
-            if (Menu == null || Menu.Type != MenuType.Fuser || Menu.ExtraFree > 0) return;
-            Menu.ExtraFree = RollFreeCount(); AdWatched = true;
+            foreach (var b in Balls) if (b.Level < 3 && b.Fused == null) return true;
+            foreach (var it in Items) if (it.Level < 3) return true;
+            return false;
         }
 
-        public void FuserFree() { FuserFree(0); }
+        /// <summary>
+        /// Crucible R3 (ads.md): a watched ad adds one piece to this Crucible's Free Upgrades count (capped at 5, §5.4 ①);
+        /// the extra piece is drawn by the same rules. Once per Crucible; the player still picks freely.
+        /// </summary>
+        public void FuserAdUpgrade()
+        {
+            if (Menu == null || Menu.Type != MenuType.Fuser || Menu.ExtraAdUsed || !FuserCanUpgrade()) return;
+            Menu.ExtraAdUsed = true; Menu.FreeBonus = 1; AdWatched = true;
+        }
 
-        /// <summary>Free Upgrades; count > 0 applies a pre-rolled count (the ad card) instead of rolling.</summary>
-        public void FuserFree(int count)
+        public void FuserFree()
         {
             if (Menu == null) return;
-            int n = count > 0 ? count : RollFreeCount();
+            int n = System.Math.Min(5, RollFreeCount() + Menu.FreeBonus);
             var cand = new List<object>();
             foreach (var b in Balls) if (b.Level < 3 && b.Fused == null) cand.Add(b);
             foreach (var it in Items) if (it.Level < 3) cand.Add(it);
