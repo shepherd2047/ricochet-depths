@@ -66,7 +66,7 @@ namespace Pit.EditorTools
             var fwd = new Vector3(0, Mathf.Sin(th), Mathf.Cos(th));
             cam.transform.localPosition = new Vector3(0, 0, -a.Half.z * 0.5f) - fwd * 3.2f;
             cam.transform.localRotation = Quaternion.LookRotation(fwd, new Vector3(0, Mathf.Cos(th), -Mathf.Sin(th)));
-            string[] order = foe ? new[] { "Idle", "Move", "Attack", "Hit", "Death" } : new[] { "Idle", "Walk", "Shoot", "Hit", "Death", "Victory" };
+            string[] order = foe ? new[] { "Idle", "Move", "Attack", "Hit", "Death" } : new[] { "Idle", "Walk", "Run", "Shoot", "Hit", "Death", "Victory" };
             int cols = 0; foreach (var c in a.Clips.Values) cols = Mathf.Max(cols, c.Frames.Length);
             var sheet = new Texture2D(cols * T, order.Length * T, TextureFormat.RGB24, false);
             var px = new Color32[cols * T * order.Length * T];
