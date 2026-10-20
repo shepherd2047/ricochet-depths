@@ -522,4 +522,5 @@ def main():
     log(f"{len(rig.data.bones)} bones, {len(obj.data.polygons)} tris")
 
 
-main()
+if __name__ == "__main__":
+    main()

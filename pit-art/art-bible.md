@@ -58,6 +58,8 @@ Theme 1 local light: one copper spot light (`#D98841`, low intensity) from a "fu
 
 **Bold pass (2026-10-19):** concepts were regenerated with bold blocks. Tinker = red knit cap, cobalt scarf, mustard apron, teal shirt, navy trousers, red boots, gold launcher (`concept/hero_tinker.jpg`, model `models/lowpoly/hero_tinker.glb`). Bold Wren / Osk / Juno concepts are in `concept/v2/` but not yet converted; their current models are the old dark v1 and are parked. The hex ramps in the table above are the v1 values; the signature hue per hero still holds.
 
+**Layered rig (2026-10-19):** Tinker's bind pose is now the two-handed launcher stance. A new gold launcher with a bell muzzle and tuning-fork prongs sits on the right shoulder, muzzle forward, both hands on it. It's animated in upper and lower layers (style.md §6.1); see `ANIM.md` and `models/lowpoly/hero_tinker_layered.*`. The A-pose arm span quoted below applies only to the old `models/rigged/hero_tinker`.
+
 **On-board size (user, 2026-10-19: "the player is too small on the map — at least one full cell"):** the hero model is drawn **1.35 cells tall**, scaled by its height, so the A-pose arm span (~1.1 cells for Tinker) and the body fill at least one cell. It must never be fitted into its hit circle (R 0.38 board units ≈ 0.68 cell), because the A-pose arms then shrink the body to about a third of a cell. The hit circle stays gameplay-only. The model files are unchanged: 1.0 m tall, feet at the origin, facing −Y. Engine side: Board3D.Hero.
 
 Hero rules: skin tones in V 35–50 %; no pure black; the signature colour must cover ≥ 10 % of the silhouette's front so heroes read against warm enemies.
