@@ -969,6 +969,9 @@ namespace Pit.Game
         /// clock follows the sim's time, so pauses and game speed carry over, and real time once the run is over.
         /// </summary>
         /// <summary>The hero's drawn bounds in world units (1 unit = 1 cell), for the size check in PitCapture.</summary>
+        /// <summary>Capture hook (PitCapture herosheet): holds the rig's body yaw so an aim offset stays on screen.</summary>
+        public float? HeroBodyLock;
+
         public Bounds HeroBounds { get { return hero != null ? hero.Mr.bounds : new Bounds(); } }
 
         /// <summary>
@@ -998,6 +1001,7 @@ namespace Pit.Game
             float off = Mathf.DeltaAngle(bodyAim, p.Aim);
             if (Mathf.Abs(off) > 35) bodyAim = p.Aim - Mathf.Sign(off) * 35;
             bodyAim = Mathf.MoveTowardsAngle(bodyAim, p.Aim, 180 * dt);
+            if (HeroBodyLock.HasValue) bodyAim = HeroBodyLock.Value;
             if (drive > 0) walkT += dt * 1.25f;
             int tick = Mathf.FloorToInt(heroT * AnimFps);
             if (tick == heroTick) return true;

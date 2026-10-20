@@ -149,6 +149,73 @@ namespace Pit.EditorTools
             Debug.Log("PitCapture: " + path);
         }
 
+        /// <summary>
+        /// The hero in the real board render, close up: rows of 10 fps frames for walking back while firing forward,
+        /// strafing left while aiming right (body yaw held), idle with aim left / forward / right, and Death. The board
+        /// is emptied and the sim isn't stepped; the clock, input, aim and launch counter are set by hand each frame.
+        /// Writes the sheet to path and every tile next to it (path_r{row}_{frame}.png) for a GIF.
+        /// </summary>
+        static void HeroSheet(string path, Pit.Core.Run r, Board3D board, WorldView world, Gfx gfx, Ui ui, Screens screens, float w, float h, float scale)
+        {
+            const int T = 240, Cols = 8;
+            r.Enemies.Clear(); r.Field.Clear(); r.Drops.Clear(); r.Shots.Clear(); r.Volley = null;
+            r.P.X = r.Bw / 2; r.P.Y = r.Bh * 0.6f; r.P.HurtT = 0;
+            // name, move x, move y, aim (game degrees, 90 = up the board), body lock, fire, death
+            var rows = new object[][]
+            {
+                new object[] { "walk back, fire forward", 0f, 1f, 90f, null, true, false },
+                new object[] { "strafe left, aim right", -1f, 0f, 55f, 90f, false, false },
+                new object[] { "idle, aim left", 0f, 0f, 125f, 90f, false, false },
+                new object[] { "idle, aim forward", 0f, 0f, 90f, 90f, false, false },
+                new object[] { "idle, aim right", 0f, 0f, 55f, 90f, false, false },
+                new object[] { "death", 0f, 0f, 90f, 90f, false, true },
+            };
+            var cam = new GameObject("hero-cam").AddComponent<Camera>();
+            var rt = new RenderTexture(T, T, 24, RenderTextureFormat.ARGB32);
+            var tile = new Texture2D(T, T, TextureFormat.RGB24, false);
+            var sheet = new Texture2D(Cols * T, rows.Length * T, TextureFormat.RGB24, false);
+            Vector3? centre = null;   // the standing hero's centre, kept for every row so Death falls within the frame
+            string stem = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path)), System.IO.Path.GetFileNameWithoutExtension(path));
+            for (int row = 0; row < rows.Length; row++)
+            {
+                var rw = rows[row];
+                r.Mode = (bool)rw[6] ? Mode.Dying : Mode.Playing;
+                r.InputX = (float)rw[1]; r.InputY = (float)rw[2]; r.P.Aim = (float)rw[3];
+                board.HeroBodyLock = rw[4] == null ? (float?)null : (float)rw[4];
+                // settle a second into the row's state (body yaw, walk clock) before the frames
+                bool death = (bool)rw[6];
+                for (int f = death ? 0 : -10; f < Cols; f++)
+                {
+                    r.Time += 0.1f;
+                    if ((bool)rw[5] && f % 2 == 0) r.Launches++;
+                    gfx.Time = r.Time; gfx.Begin(w, h, scale); ui.BeginFrame();
+                    world.Layout(r, screens.HudTop, screens.HudBottom); board.Frame(r, world, gfx); world.Draw(r);
+                    ui.EndFrame(); gfx.End();
+                    if (f < 0) continue;
+                    cam.CopyFrom(board.Cam);
+                    cam.fieldOfView = 26;
+                    if (centre == null) centre = board.HeroBounds.center;
+                    // Death falls back toward the camera, so its row looks lower
+                    var aimAt = centre.Value + cam.transform.up * (death ? -0.35f : 0.45f);
+                    cam.transform.position = aimAt - cam.transform.forward * 7.5f;
+                    cam.targetTexture = rt;
+                    cam.Render();
+                    RenderTexture.active = rt;
+                    tile.ReadPixels(new Rect(0, 0, T, T), 0, 0);
+                    tile.Apply();
+                    sheet.SetPixels(f * T, (rows.Length - 1 - row) * T, T, T, tile.GetPixels());
+                    System.IO.File.WriteAllBytes(stem + "_r" + row + "_" + f + ".png", tile.EncodeToPNG());
+                }
+                Debug.Log("PitCapture: hero row " + rw[0]);
+            }
+            RenderTexture.active = null;
+            board.HeroBodyLock = null;
+            UnityEngine.Object.DestroyImmediate(cam.gameObject);
+            sheet.Apply();
+            System.IO.File.WriteAllBytes(stem + "_sheet.png", sheet.EncodeToPNG());
+            Debug.Log("PitCapture: " + stem + "_sheet.png");
+        }
+
         /// <summary>-pitBall: every owned ball (not fused ones) becomes the given ball at its level.</summary>
         static void OnlyBall(Pit.Core.Run r, string id)
         {
@@ -247,6 +314,7 @@ namespace Pit.EditorTools
                     for (int i = 0; i < kinds.Length; i++)
                         r.Drops.Add(new Drop { Kind = kinds[i], X = 0.6f + i * (r.Bw - 1.2f) / (kinds.Length - 1), Y = r.P.Y - 2.2f, V = vals[i] });
                 }
+                if (which == "herosheet") HeroSheet(path, r, board, world, gfx, ui, screens, w, h, scale);
                 if (which == "pause") r.Pause();
                 if (which == "crucibleplus") r.FuserAdUpgrade();
                 // the placeholder 0.8 s into its 2 s countdown, over the revive prompt that opened it
