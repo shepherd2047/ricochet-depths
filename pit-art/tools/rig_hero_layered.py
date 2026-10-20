@@ -81,9 +81,13 @@ def _env(k, d):
     return d if v is None else (tuple(float(x) for x in v.split(",")) if "," in v else float(v))
 
 
-LX, LZ, Y0, GR, GL = _env("LX", 0.185), _env("LZ", 0.64), _env("Y0", 0.08), _env("GR", 0.15), _env("GL", 0.27)
+LX, LZ, Y0, GR, GL = _env("LX", 0.185), _env("LZ", 0.62), _env("Y0", 0.03), _env("GR", 0.15), _env("GL", 0.27)
 DR, DL = _env("DR", (0.8, -0.4, 0.25)), _env("DL", (-0.8, -0.45, 0.3))
 TWIST = _env("TWIST", 35)  # rest stance: torso bladed this many degrees to the right (left shoulder forward)
+BL = _env("BL", 1.2)  # barrel length factor (bell + prongs move out with it)
+PITCH = _env("PITCH", 30)  # rest stance: muzzle this many degrees up, so the barrel rises past the cap seen from behind
+GAME_DEG = _env("GAME_DEG", 40)  # check-render camera: behind the hero, this many degrees down (pit-unity: 40)
+HEAD = _env("HEAD", 0.86)  # head + cap scale (pit-unity close-up: the cap hid the body); the model is rescaled to 1 m
 
 
 def launcher_frame(cx):
@@ -93,7 +97,13 @@ def launcher_frame(cx):
     grip_l = Vector((lx + 0.01, y0 - GL, lz - 0.055))  # fore-grip: palm under the barrel
     dir_r = Vector((DR[0], DR[1], DR[2])).normalized()  # mitt direction (fingers) per hand
     dir_l = Vector((DL[0], DL[1], DL[2])).normalized()
-    return dict(lx=lx, lz=lz, y0=y0, grip_r=grip_r, grip_l=grip_l, dir_r=dir_r, dir_l=dir_l)
+    # the whole launcher (and both grips) pitched muzzle-up about the right grip
+    R = Matrix.Rotation(math.radians(-PITCH), 3, "X")  # about +X, −Y (muzzle) turns toward −Z; negative = up
+    piv = grip_r.copy()
+    rot = lambda p: piv + R @ (p - piv)  # noqa: E731
+    muzzle = rot(Vector((lx, y0 - 0.33 * BL, lz)))
+    return dict(lx=lx, lz=lz, y0=y0, grip_r=grip_r, grip_l=rot(grip_l), dir_r=R @ dir_r, dir_l=R @ dir_l,
+                R=R, piv=piv, rot=rot, muzzle=muzzle, axis=(R @ Vector((0, -1, 0))).normalized())
 
 
 def find_texel(img, rgb):
@@ -137,8 +147,8 @@ def add_launcher(obj, L):
             face(rings[-1], uvs[-1])
 
     # barrel (rear → muzzle along −Y): rear cap, body, cobalt band, body, bell flare
-    rs = [ring(y0, 0.034), ring(y0 - 0.02, 0.044), ring(y0 - 0.25, 0.042), ring(y0 - 0.29, 0.068),
-          ring(y0 - 0.33, 0.064)]
+    rs = [ring(y0, 0.034), ring(y0 - 0.02, 0.044), ring(y0 - 0.25 * BL, 0.042), ring(y0 - 0.29 * BL, 0.068),
+          ring(y0 - 0.33 * BL, 0.064)]
     tube(rs, [uv_dark, uv_gold, uv_gold, uv_gold, uv_dark])
 
     def box(c, size, uv):
@@ -151,15 +161,51 @@ def add_launcher(obj, L):
 
     # tuning-fork prongs out of the bell
     for sx in (-1, 1):
-        box((lx + sx * 0.034, y0 - 0.365, lz), (0.026, 0.08, 0.03), uv_gold)
+        box((lx + sx * 0.034, y0 - 0.33 * BL - 0.035, lz), (0.026, 0.08, 0.03), uv_gold)
     # cobalt pistol grip and fore-grip block
     box((lx, y0 - GR, lz - 0.06), (0.034, 0.04, 0.07), uv_cobalt)
     box((lx, y0 - GL, lz - 0.045), (0.05, 0.06, 0.03), uv_cobalt)
+    bm.verts.ensure_lookup_table()
+    for v in bm.verts[n0:]:
+        v.co = L["rot"](v.co)
     bm.to_mesh(obj.data)
     bm.free()
     new = list(range(n0, len(obj.data.vertices)))
     obj.vertex_groups["RightHand"].add(new, 1.0, "REPLACE")
     log(f"launcher: {len(new)} verts")
+
+
+def shrink_head(obj):
+    """Scale the head and cap by HEAD about the neck (smooth over a 6 cm band), then scale the model back to its height."""
+    if abs(HEAD - 1.0) < 1e-6:
+        return
+    P = np.array([v.co[:] for v in obj.data.vertices])
+    J = rh.estimate_joints(P)
+    zt = P[:, 2].max()
+    neck = J["Neck"].z + 0.02
+    piv = Vector((J["Head"].x, -0.025, neck))
+    for v in obj.data.vertices:
+        w = min(1.0, max(0.0, (v.co.z - (neck - 0.03)) / 0.06))
+        w = w * w * (3 - 2 * w)
+        v.co = piv + (v.co - piv) * (1 + (HEAD - 1) * w)
+    k = zt / max(v.co.z for v in obj.data.vertices)
+    for v in obj.data.vertices:
+        v.co = Vector((v.co.x * k, v.co.y * k, v.co.z * k))
+    log(f"head x{HEAD}, body rescaled x{k:.3f} to keep the height")
+
+
+def add_muzzle_bone(rig, L):
+    """Non-deforming 'Muzzle' bone under RightHand at the bell mouth, Y axis along the barrel (flash attach point)."""
+    pose_mode(rig)
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb = rig.data.edit_bones.new("Muzzle")
+    eb.head = L["muzzle"]
+    eb.tail = L["muzzle"] + L["axis"] * 0.05
+    eb.parent = rig.data.edit_bones["RightHand"]
+    eb.use_deform = False
+    eb.align_roll(Vector(Z))
+    bpy.ops.object.mode_set(mode="OBJECT")
+    log(f"Muzzle bone at {tuple(round(c, 3) for c in L['muzzle'])}, axis {tuple(round(c, 3) for c in L['axis'])}")
 
 
 # ------------------------------------------------------------------------------------ stance
@@ -363,18 +409,24 @@ def aim_walk(aim):  # 0.8 s, two steps: lean in, bob on each step (lagging the h
     return fn
 
 
-def shoot(aim):  # 0.2 s: frame 0 full kick, frame 1 settling, frame 2 = aim pose
+def shoot(aim):
+    """0.2 s, read from 40 deg behind: frame 0 squash (hunch forward, muzzle dips, cap ducks), frame 1 big kick (spine +
+    chest snap back ~30 deg, throwing the launcher ~0.15 m back toward the camera, muzzle up 30, cap bobs back),
+    frame 2 = aim pose."""
     def fn(t, u):
-        k = (1.0, 0.4, 0.0)[min(2, round(t * 10))]
-        return upper_pose(aim, chest_pitch=-15.0 * k, spine_pitch=-6.0 * k, arm_pitch=-32.0 * k, sh_up=0.014 * k, head_pitch=-8.0 * k)
+        sq, k = ((1.0, 0.0), (0.0, 1.0), (0.0, 0.0))[min(2, round(t * 10))]
+        return upper_pose(aim, chest_pitch=8.0 * sq - 17.0 * k, spine_pitch=4.0 * sq - 13.0 * k,
+                          arm_pitch=8.0 * sq - 30.0 * k, sh_up=-0.01 * sq + 0.014 * k,
+                          head_pitch=10.0 * sq - 14.0 * k)
     return fn
 
 
 # ----------------------------------------------------------------------------- lower layer
 CROUCH = 0.02     # hips lowered in every lower clip: knees never lock straight
-STRIDE = 0.20     # foot travel per step (m), all four walk directions
+STRIDE = 0.26     # foot travel per step (m), all four walk directions
 WALK_T = 0.8
-LIFT = 0.07
+LIFT = 0.09
+WIDE = 0.035      # every lower clip: each foot this much further out than the bind pose, so feet clear the cap
 
 
 class Legs:
@@ -481,7 +533,7 @@ def stand_hips(t, u):
 
 
 def stand_feet(t, u):
-    return {"Left": ((0, 0, 0), 0.0), "Right": ((0, 0, 0), 0.0)}
+    return {"Left": ((WIDE, 0, 0), 0.0), "Right": ((-WIDE, 0, 0), 0.0)}
 
 
 def walk_feet(d, widen=0.0):
@@ -499,7 +551,7 @@ def walk_feet(d, widen=0.0):
             off = d * STRIDE * (-0.5 + e)
             off.z = LIFT * math.sin(math.pi * s)
             pitch = (-18.0 if not back else 14.0) * math.sin(math.pi * s)  # toe down while lifting (+ = toe up)
-        off.x += side_sign * widen
+        off.x += side_sign * (WIDE + widen)
         return off, pitch
 
     def fn(t, u):
@@ -562,7 +614,7 @@ def victory_hips(t, u):
 
 def victory_feet(t, u):
     v = _vic(t)
-    return {"Left": ((0.01, 0, v["lift"]), -15 * v["lift"] / 0.06), "Right": ((-0.01, 0, v["lift"]), -15 * v["lift"] / 0.06)}
+    return {"Left": ((WIDE, 0, v["lift"]), -15 * v["lift"] / 0.06), "Right": ((-WIDE, 0, v["lift"]), -15 * v["lift"] / 0.06)}
 
 
 def victory_upper(t, u):
@@ -585,7 +637,7 @@ def build_clips(rig):
     legs = Legs(rig)
     acts["Stand"] = legs.clip("Stand", 0.9, True, stand_hips, stand_feet)
     for name, d, w in (("WalkForward", (0, -1), 0.0), ("WalkBack", (0, 1), 0.0),
-                       ("StrafeLeft", (1, 0), 0.016), ("StrafeRight", (-1, 0), 0.016)):
+                       ("StrafeLeft", (1, 0), 0.025), ("StrafeRight", (-1, 0), 0.025)):
         acts[name] = legs.clip(name, WALK_T, True, walk_hips(d), walk_feet(d, w))
     acts["Death"] = fk_clip(rig, "Death", 0.8, False, death_pose, UPPER + LOWER)
     acts["Victory"] = legs.clip("Victory", 0.9, True, victory_hips, victory_feet, victory_upper)
@@ -655,7 +707,7 @@ class Cams:
         self.cams = {}
         # game: perspective, behind the hero (+Y) and 40° above, looking at −Y (into the pit)
         # the board camera is tilted 40° (FOV 65°); the ray to the hero's rows near the bottom edge is ≈ 47° steep
-        self.add("game", "PERSP", (0, 3.4 * math.cos(math.radians(47)), 0.42 + 3.4 * math.sin(math.radians(47))))
+        self.add("game", "PERSP", (0, 3.4 * math.cos(math.radians(GAME_DEG)), 0.42 + 3.4 * math.sin(math.radians(GAME_DEG))))
         self.add("front", "ORTHO", (1.7, -2.6, 1.3))
         self.add("side", "ORTHO", (-3.0, 0, 0.5))
         self.add("fronto", "ORTHO", (0, -3.0, 0.5))
@@ -822,6 +874,7 @@ def main():
         bm.to_mesh(obj.data)
         bm.free()
         log(f"removed old prop ({sum(len(c) for c in isl[1:])} verts)")
+    shrink_head(obj)
     P = np.array([v.co[:] for v in obj.data.vertices])
     J, cx = joints(P)
     rig = rh.build_armature(J, NAME)
@@ -829,6 +882,7 @@ def main():
     L = launcher_frame(cx)
     stance(obj, rig, L, cx)
     add_launcher(obj, L)
+    add_muzzle_bone(rig, L)
     for p in obj.data.polygons:
         p.use_smooth = True
     obj.name = NAME
