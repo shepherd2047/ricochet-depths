@@ -11,7 +11,9 @@ namespace Pit.Game
 
         const float DesignW = 360, DesignH = 640, Step = 1 / 60f;
         // the whole game runs 44 % faster (two 20 % steps) than the sim's own clock; the x1 / x1.5 / x2 button multiplies on top
-        const float GameSpeed = 1.44f;
+        public static float GameSpeed = 1.44f;   // the dev panel tunes it live
+        // the board comes down 25 % faster than the sim's own pace (Run.Descent); the dev panel can change it live
+        public const float Descent = 1.25f;
 
         Camera cam;
         Board3D board;
@@ -19,6 +21,7 @@ namespace Pit.Game
         Ui ui;
         WorldView world;
         Screens screens;
+        DevPanel dev;
         IPlatform platform;
         AudioBank audio;
         PlaceholderAds ads;
@@ -74,6 +77,7 @@ namespace Pit.Game
             audio = new AudioBank(gameObject);
             ads = new PlaceholderAds(AdConfig.Default);
             screens = new Screens(gfx, ui) { Board = board, Audio = audio, SelHero = heroId, Ads = ads, AdCfg = ads.Cfg };
+            dev = new DevPanel(gfx, ui);
             seed = System.Environment.TickCount & 0x7fffffff;
         }
 
@@ -146,7 +150,7 @@ namespace Pit.Game
         void NewRun()
         {
             seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-            run = new Run(seed, heroId) { AdsOn = true };
+            run = new Run(seed, heroId) { AdsOn = true, Descent = Descent };
             acc = 0;
             stick = false;
             screen = Screen_.Game;
@@ -160,7 +164,7 @@ namespace Pit.Game
             // ---- input
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.P)) { if (r.Mode == Mode.Paused) r.Resume(); else r.Pause(); }
             if (Input.GetKeyDown(KeyCode.B)) screens.BotOn = !screens.BotOn;   // dev autopilot
-            bool playing = r.Mode == Mode.Playing || r.Mode == Mode.Intro || r.Mode == Mode.Clearing;
+            bool playing = (r.Mode == Mode.Playing || r.Mode == Mode.Intro || r.Mode == Mode.Clearing) && !dev.Open;
             float ix = 0, iy = 0;
             if (playing)
             {
@@ -192,15 +196,16 @@ namespace Pit.Game
             else stick = false;
             float kx = (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow) ? 1 : 0) - (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow) ? 1 : 0);
             float ky = (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow) ? 1 : 0) - (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow) ? 1 : 0);
-            if (kx != 0 || ky != 0) { ix = kx; iy = ky; }
+            if ((kx != 0 || ky != 0) && !dev.Open) { ix = kx; iy = ky; }
             r.InputX = ix; r.InputY = iy;
 
             // ---- simulate
             if (screens.BotOn && (r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser)) Bot.AutoPick(r);
             if (screens.BotOn && r.Mode == Mode.Revive) r.GiveUp();   // the bot never watches ads
             acc += dt * screens.SpeedSetting * GameSpeed;
-            Time.timeScale = screens.SpeedSetting * GameSpeed;   // the VFX clock (VfxBank ticks on Time.deltaTime) keeps pace
+            Time.timeScale = dev.Open ? 0 : screens.SpeedSetting * GameSpeed;   // the VFX clock (VfxBank ticks on Time.deltaTime) keeps pace
             int steps = 0;
+            if (dev.Open) acc = 0;   // the dev panel holds the run still
             while (acc >= Step && steps < 8)
             {
                 if (screens.BotOn) Bot.Drive(r);
@@ -223,7 +228,9 @@ namespace Pit.Game
                 float dx = ui.X - stickX, dy = ui.Y - stickY, d = Mathf.Sqrt(dx * dx + dy * dy), k = d > 46 ? 46 / d : 1;
                 gfx.Circle(stickX + dx * k, stickY + dy * k, 18, new Color32(255, 255, 255, 90));
             }
+            if (dev.Open) { dev.Toggle(screens); dev.Draw(r, screens); return; }   // the panel covers the menus (their text would show through)
             var nav = screens.Menus(r);
+            dev.Toggle(screens);
             if (nav == Nav.None) return;
             System.Action go = () =>
             {

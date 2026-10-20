@@ -154,7 +154,48 @@ static class Smoke
         Console.WriteLine($"verts: foe max {Models.MaxFoeVerts}, boss max {Models.MaxBossVerts}, hero {Models.HeroVerts}, wall {Models.WallModules()[0].VertexCount}; atlas cells used {cellsUsed}/256");
         Console.WriteLine($"revives {revives}  frames {frames}  errors {errors}  gameobjects {GameObject.Created}");
         Console.WriteLine($"vfx: balls {RicochetVfx.VfxBank.Balls} stops {RicochetVfx.VfxBank.Stops} hits {RicochetVfx.VfxBank.Hits} flashes {RicochetVfx.VfxBank.Flashes} statuses {RicochetVfx.VfxBank.Statuses} chains {RicochetVfx.VfxBank.Chains} rows {RicochetVfx.VfxBank.Rows}");
+        errors += DevCheck(frame, screens, world, new DevPanel(gfx, ui));
         return errors > 0 ? 1 : 0;
+    }
+
+    /// <summary>The dev panel: draws its three tabs, and its hooks reach every boss, add / level / remove balls and items.</summary>
+    static int DevCheck(Action<Action> frame, Screens screens, WorldView world, DevPanel dp)
+    {
+        int fails = 0, bosses = 0;
+        try
+        {
+            var r = new Run(7, "tinker") { God = true };
+            Action settle = () => { for (int k = 0; k < 20 && (r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser); k++) Bot.AutoPick(r); };
+            Action<int> play = n => { for (int k = 0; k < n && !r.IsOver; k++) { settle(); Bot.Drive(r); r.Step(1 / 60f); } };
+            play(300);
+            int lv = r.P.Level; r.DevLevels(5);
+            if (r.P.Level != lv + 5) { fails++; Console.WriteLine($"FAIL dev levels {lv} -> {r.P.Level}"); }
+            settle();
+            foreach (var id in Content.Balls.Keys) r.DevAddBall(id);
+            foreach (var id in Content.Items.Keys) r.DevAddItem(id);
+            if (r.Balls.Count != Run.Slots || r.Items.Count != Run.Slots) { fails++; Console.WriteLine($"FAIL dev slots {r.Balls.Count} balls {r.Items.Count} items"); }
+            r.DevLevelBall(r.Balls[0], 5); r.DevLevelItem(r.Items[0], 5);
+            if (r.Balls[0].Level != 3 || r.Items[0].Level != 3) { fails++; Console.WriteLine("FAIL dev level cap"); }
+            dp.Open = true;
+            for (int t = 0; t < 3; t++) { dp.Page = t; frame(() => { world.Layout(r, screens.HudTop, screens.HudBottom); world.Draw(r); bool p = false; screens.Hud(r, world, ref p); dp.Draw(r, screens); }); }
+            play(240);
+            r.DevRemoveBall(r.Balls[r.Balls.Count - 1]); r.DevRemoveItem(r.Items[r.Items.Count - 1]);
+            play(240);
+            for (int i = 0; i < r.L.Bosses.Length; i++)
+            {
+                r.DevBoss(i);
+                for (int k = 0; k < 1800 && r.Boss == null && !r.IsOver; k++) play(1);
+                if (r.Boss == null || r.Boss.Type != r.L.Bosses[i]) { fails++; Console.WriteLine($"FAIL dev boss {i}: {(r.Boss != null ? r.Boss.Type : "none")} mode {r.Mode}"); continue; }
+                play(600);
+                r.DevKillBoss();
+                play(120);
+                bosses++;
+            }
+            r.DevClear(); r.DevHeal(); r.DevGold(1000);
+            Console.WriteLine($"dev: bosses {bosses}/{r.L.Bosses.Length}, level {r.P.Level}, mode {r.Mode}, won {r.Won}");
+        }
+        catch (Exception ex) { fails++; Console.WriteLine($"FAIL dev {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}"); }
+        return fails;
     }
 
     /// <summary>Writes the pixel-art atlas as a binary PPM (rows top-down, alpha over the fog colour), scaled 4×.</summary>

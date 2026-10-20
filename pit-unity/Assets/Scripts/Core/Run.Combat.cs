@@ -306,7 +306,7 @@ namespace Pit.Core
 
         public void HurtPlayer(float baseDmg, string src)
         {
-            if (Mode != Mode.Playing || P.Hp <= 0) return;
+            if (Mode != Mode.Playing || P.Hp <= 0 || God) return;
             int dmg = M.Ceil(M.Ceil(baseDmg * (1 + 0.2f * (L.D - 1))) / Defense);
             P.Hp -= dmg; P.HurtT = 0.3f;
             Sound(Sfx.Hurt);

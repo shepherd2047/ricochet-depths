@@ -11,7 +11,7 @@ namespace Pit.EditorTools
     public static class PitBuild
     {
         const string ScenePath = "Assets/Scenes/Main.unity";
-        const string OutDir = "Builds/WebGL";
+        const string OutDir = "Builds/WebGL", FastDir = "Builds/WebGLFast";
 
         [MenuItem("Pit/Create Boot Scene")]
         public static void CreateScene()
@@ -54,10 +54,19 @@ namespace Pit.EditorTools
         [MenuItem("Pit/Build WebGL (TikTok define)")]
         public static void BuildWebGLTikTok() { Build(true); }
 
-        /// <summary>Command line: Unity -batchmode -quit -projectPath . -executeMethod Pit.EditorTools.PitBuild.BuildCli</summary>
-        public static void BuildCli() { Build(System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-pitTikTok") >= 0); }
+        /// <summary>Command line: Unity -batchmode -quit -projectPath . -executeMethod Pit.EditorTools.PitBuild.BuildCli
+        /// [-pitTikTok] [-pitFast]. -pitFast is the iteration build into Builds/WebGLFast: no compression (the Brotli pass
+        /// alone is about a minute), IL2CPP Debug and the "build times" wasm optimisation. Bigger and slower to run, never
+        /// for release; the size settings are put back afterwards.</summary>
+        public static void BuildCli()
+        {
+            var a = System.Environment.GetCommandLineArgs();
+            Build(System.Array.IndexOf(a, "-pitTikTok") >= 0, System.Array.IndexOf(a, "-pitFast") >= 0);
+        }
 
-        static void Build(bool tiktok)
+        static void Build(bool tiktok) { Build(tiktok, false); }
+
+        static void Build(bool tiktok, bool fast)
         {
             if (!File.Exists(ScenePath)) CreateScene();
             ApplySettings();
@@ -66,19 +75,28 @@ namespace Pit.EditorTools
             if (tiktok && !has) defines = (defines.Length > 0 ? defines + ";" : "") + "PIT_TIKTOK";
             if (!tiktok && has) defines = defines.Replace(";PIT_TIKTOK", "").Replace("PIT_TIKTOK;", "").Replace("PIT_TIKTOK", "");
             PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.WebGL, defines);
+            string opt = EditorUserBuildSettings.GetPlatformSettings("WebGL", "CodeOptimization");
+            if (fast)
+            {
+                PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
+                PlayerSettings.SetIl2CppCompilerConfiguration(NamedBuildTarget.WebGL, Il2CppCompilerConfiguration.Debug);
+                EditorUserBuildSettings.SetPlatformSettings("WebGL", "CodeOptimization", "BuildTimes");
+            }
+            string outDir = fast ? FastDir : OutDir;
 
             var opts = new BuildPlayerOptions
             {
                 scenes = new[] { ScenePath },
-                locationPathName = OutDir,
+                locationPathName = outDir,
                 target = BuildTarget.WebGL,
                 options = BuildOptions.None
             };
             var report = BuildPipeline.BuildPlayer(opts);
+            if (fast) { ApplySettings(); EditorUserBuildSettings.SetPlatformSettings("WebGL", "CodeOptimization", opt ?? ""); }
             var s = report.summary;
             long bytes = 0;     // the WebGL report's totalSize is 0, so measure the output folder
-            if (Directory.Exists(OutDir)) foreach (var f in Directory.GetFiles(OutDir, "*", SearchOption.AllDirectories)) bytes += new FileInfo(f).Length;
-            Debug.Log("Pit: build " + s.result + ", " + (bytes / 1024f / 1024f).ToString("0.0") + " MB on disk, " + s.totalTime);
+            if (Directory.Exists(outDir)) foreach (var f in Directory.GetFiles(outDir, "*", SearchOption.AllDirectories)) bytes += new FileInfo(f).Length;
+            Debug.Log("Pit: " + (fast ? "fast " : "") + "build " + s.result + ", " + (bytes / 1024f / 1024f).ToString("0.0") + " MB on disk, " + s.totalTime);
             if (Application.isBatchMode && s.result != UnityEditor.Build.Reporting.BuildResult.Succeeded) EditorApplication.Exit(1);
         }
     }

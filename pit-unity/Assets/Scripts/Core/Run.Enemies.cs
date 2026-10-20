@@ -43,13 +43,13 @@ namespace Pit.Core
                 // ---- advance
                 if (!frozen && e.Atk == null)
                 {
-                    float baseSp = CELL / tl * e.Def.Spd, sp = baseSp;
+                    float baseSp = CELL / tl * e.Def.Spd * Descent, sp = baseSp;
                     if (e.Def.FlyGround != null) sp = e.Flying ? baseSp * 3 : 0;
                     if (e.Under) sp = baseSp * 1.5f;
                     Status s;
                     if (e.St.TryGetValue("slow", out s)) sp *= 1 - (s.Pct > 0 ? s.Pct : 30) / 100f;
                     if (Has(e, "poison")) sp *= 0.8f;
-                    if (e.HasteT > 0 && sp > 0) sp = M.Max(sp, CELL / tl);
+                    if (e.HasteT > 0 && sp > 0) sp = M.Max(sp, CELL / tl * Descent);
                     if (charmed)
                     {
                         e.Y = M.Max(0, e.Y - CELL / tl * dt);

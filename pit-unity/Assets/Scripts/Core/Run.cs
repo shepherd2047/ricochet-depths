@@ -33,6 +33,9 @@ namespace Pit.Core
         // edge of the board's top row, rows × CELL from the near edge, so board y 0; it moves back with an expansion.
         // New waves spawn above it and only come into play once the floor scrolls them over it.
         public float Scroll, ScrollSpeed = 1, FloorShift;
+        /// <summary>How fast the board comes down (the floor, the foes' advance and the wave clock): the host sets it
+        /// (1.25 in the game, live from the dev panel); the sims keep 1. Foes' attack timers are not affected.</summary>
+        public float Descent = 1;
         public const float FarY = 0;
         public Expansion Expand;
         public Enemy Boss;
@@ -225,7 +228,7 @@ namespace Pit.Core
         {
             if (Boss != null && Boss.BossDef.Final) ScrollSpeed = 0;   // the corridor ends: the final boss walks out of it
             else if (Mode == Mode.Dying || Mode == Mode.Clearing) ScrollSpeed = M.Max(0, ScrollSpeed - dt);
-            float d = ScrollSpeed * dt / L.TurnLen;
+            float d = ScrollSpeed * Descent * dt / L.TurnLen;
             if (d <= 0) return;
             Scroll += d;
             FloorShift += d * CELL;
@@ -257,7 +260,7 @@ namespace Pit.Core
                 if (Expand != null) StepExpand(dt);
                 else
                 {
-                    NextWaveIn -= dt;
+                    NextWaveIn -= dt * Descent;   // waves keep pace with the faster descent
                     if (NextWaveIn <= 0) SpawnTick();
                     CheckClearBonus();
                 }

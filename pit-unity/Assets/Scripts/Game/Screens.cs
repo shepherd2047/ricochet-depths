@@ -203,7 +203,7 @@ namespace Pit.Game
 
             // row 1: pause, speed, gold
             if (Btn("pause", X(4), TY(24), 24 * A, 24 * A, null, 0, icon: "ic_pause", inert: modal)) pauseClicked = true;
-            string sp = SpeedSetting >= 2 ? "x2" : SpeedSetting >= 1.5f ? "x1.5" : "x1";
+            string sp = SpeedSetting >= 4 ? "x4" : SpeedSetting >= 3 ? "x3" : SpeedSetting >= 2 ? "x2" : SpeedSetting >= 1.5f ? "x1.5" : "x1";   // x3 / x4 from the dev panel
             if (Btn("speed", X(30), TY(24), 24 * A, 24 * A, null, 0, digits: sp, inert: modal))
                 SpeedSetting = SpeedSetting >= 2 ? 1 : SpeedSetting >= 1.5f ? 2 : 1.5f;
             g.Skin("inset", X(58), TY(28), 52 * A, 16 * A, Col.White);

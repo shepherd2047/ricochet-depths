@@ -250,7 +250,7 @@ namespace UnityEngine
     }
     public enum TouchPhase { Began, Moved, Stationary, Ended, Canceled }
     public struct Touch { public int fingerId; public Vector2 position; public TouchPhase phase; }
-    public enum KeyCode { None, A, B, D, P, S, W, Escape, LeftArrow, RightArrow, UpArrow, DownArrow, F8 }
+    public enum KeyCode { None, A, B, D, P, S, W, Escape, LeftArrow, RightArrow, UpArrow, DownArrow, F8, F1, BackQuote }
     public static class Input
     {
         public static int touchCount; public static bool multiTouchEnabled; public static Vector3 mousePosition;
