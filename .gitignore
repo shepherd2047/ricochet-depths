@@ -8,6 +8,7 @@
 !/pit-scene/
 !/pit-ui/
 !/pit-audio/
+!/pit-vfx/
 
 # NEVER track the analysis side (decompiled code and extracted assets of the reference game).
 /ballpit-re/
@@ -30,6 +31,18 @@ pit-unity/MemoryCaptures/
 pit-unity/*.csproj
 pit-unity/*.sln
 pit-unity/*.slnx
+pit-vfx/VfxLab/[Ll]ibrary/
+pit-vfx/VfxLab/[Tt]emp/
+pit-vfx/VfxLab/[Oo]bj/
+pit-vfx/VfxLab/[Bb]uild/
+pit-vfx/VfxLab/[Bb]uilds/
+pit-vfx/VfxLab/[Ll]ogs/
+pit-vfx/VfxLab/[Uu]ser[Ss]ettings/
+pit-vfx/VfxLab/MemoryCaptures/
+pit-vfx/VfxLab/.vscode/
+pit-vfx/VfxLab/*.csproj
+pit-vfx/VfxLab/*.sln
+pit-vfx/VfxLab/*.slnx
 
 .DS_Store
 
