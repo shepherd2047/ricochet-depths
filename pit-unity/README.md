@@ -144,3 +144,18 @@ The asmdefs define `PIT_URP` when the package is present. Without it, the code f
 ## Controls
 
 Drag anywhere to move; the joystick floats under your finger. Balls fire on their own, and a tap focuses a foe. In the Editor: WASD or arrows to move, P/Esc to pause, **B** to toggle the dev autopilot. The HUD has a 1x/2x speed button.
+
+The HUD speed button cycles x1, x1.5, x2, x3 and x4. Under that, the whole game runs at `GameRoot.GameSpeed` (1.44), and the map comes down at `GameRoot.Descent` (1.25). Descent scales the scroll, foe speed and wave timer. The sims keep 1, so balance sweeps don't change.
+
+**Dev panel.** Open it with the DEV button at the top of the HUD, or with F1 / backquote. It pauses the game. It is left out of `-pitTikTok` builds unless `PIT_DEV` is defined.
+- **RUN tab:**
+  - level +1 / +5 / +10 / +25 (picks are automatic, with a toggle to pick by hand);
+  - full HP, god mode and gold;
+  - a jump to each boss, plus kill boss and clear foes;
+  - live **GAME SPEED** and **MAP DESCENT** steppers, the bot and the speed setting.
+- **BALLS / ITEMS tabs:** add, level and remove balls and items.
+- The hooks are in `Core/Run.Dev.cs`. StubCheck prints `dev: bosses 3/3 ...`.
+
+## Fast builds
+
+`-executeMethod Pit.EditorTools.PitBuild.BuildCli -pitFast` writes `Builds/WebGLFast`. It turns compression off, which saves the roughly 65 s of brotli, and asks for IL2CPP Debug / BuildTimes. The log still names `release_WebGL_wasm` and the wasm is the same size, so that second part may not take effect. Tune the pace with the dev panel steppers, not with rebuilds.
