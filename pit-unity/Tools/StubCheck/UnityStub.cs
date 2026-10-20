@@ -247,7 +247,7 @@ namespace UnityEngine
     }
     public enum TouchPhase { Began, Moved, Stationary, Ended, Canceled }
     public struct Touch { public int fingerId; public Vector2 position; public TouchPhase phase; }
-    public enum KeyCode { None, A, B, D, P, S, W, Escape, LeftArrow, RightArrow, UpArrow, DownArrow }
+    public enum KeyCode { None, A, B, D, P, S, W, Escape, LeftArrow, RightArrow, UpArrow, DownArrow, F8 }
     public static class Input
     {
         public static int touchCount; public static bool multiTouchEnabled; public static Vector3 mousePosition;
@@ -256,10 +256,10 @@ namespace UnityEngine
     }
     public static class Screen { public static int width, height; public static Rect safeArea; }
     public static class Time { public static float unscaledDeltaTime = 1 / 60f; public static int frameCount; }
-    public static class Application { public static int targetFrameRate; }
+    public static class Application { public static int targetFrameRate; public static bool isEditor; }
     public static class QualitySettings { public static int vSyncCount; }
     public static class Random { static readonly System.Random r = new System.Random(1); public static float value { get { return (float)r.NextDouble(); } } }
-    public static class Debug { public static void Log(object o) { } public static void LogWarning(object o) { System.Console.Error.WriteLine("warning: " + o); } }
+    public static class Debug { public static bool isDebugBuild; public static void Log(object o) { } public static void LogWarning(object o) { System.Console.Error.WriteLine("warning: " + o); } }
     public enum RuntimeInitializeLoadType { AfterSceneLoad, BeforeSceneLoad }
     [System.AttributeUsage(System.AttributeTargets.Method)] public sealed class RuntimeInitializeOnLoadMethodAttribute : System.Attribute { public RuntimeInitializeOnLoadMethodAttribute(RuntimeInitializeLoadType t) { } }
 }

@@ -1,6 +1,6 @@
 // Command line (needs graphics, so no -nographics):
 //   Unity -batchmode -quit -projectPath . -executeMethod Pit.EditorTools.PitCapture.Run -pitShot out.png [-pitTurn 12] [-pitHero tinker]
-//     [-pitScreen hud|title|heroes|levelup|crucible|pause|end|clips] [-pitW 1080 -pitH 1920] [-pitFinal] [-pitRec 4]
+//     [-pitScreen hud|title|heroes|levelup|crucible|pause|end|revive|ad|crucible4|clips] [-pitW 1080 -pitH 1920] [-pitFinal] [-pitRec 4]
 // -pitScreen clips renders every baked frame of the hero's clips (Models.Clip) as a sheet, one clip per row.
 // -pitRec s plays on for s more seconds after the shot and writes a 10 fps frame sequence next to it (out_000.png ...).
 // -pitFinal keeps the hero alive and stops once the final boss has been on the board for -pitAfter seconds (default 0),
@@ -123,14 +123,16 @@ namespace Pit.EditorTools
                 var gfx = new Gfx(layers.transform, board.WorldRoot);
                 var ui = new Ui(gfx);
                 var world = new WorldView(gfx) { Units3D = true };
-                var screens = new Screens(gfx, ui) { SafeTop = 44, SafeBottom = 34, Board = board, SelHero = heroId };
+                var ads = new PlaceholderAds(AdConfig.Default);
+                var screens = new Screens(gfx, ui) { SafeTop = 44, SafeBottom = 34, Board = board, SelHero = heroId, Ads = ads };
                 float w = W / scale, h = H / scale;
                 uiCam.orthographicSize = h / 2;
                 uiCam.aspect = (float)W / H;   // batch mode has no game view, so the overlay would keep a default aspect
                 board.Cam.aspect = (float)W / H;
                 uiCam.transform.localPosition = new Vector3(w / 2, -h / 2, -10);
 
-                var r = new Pit.Core.Run(1234, heroId);
+                bool adShot = which == "revive" || which == "ad";
+                var r = new Pit.Core.Run(1234, heroId) { AdsOn = adShot };
                 bool final = Arg("-pitFinal", null) != null;
                 float after = float.Parse(Arg("-pitAfter", "0"), System.Globalization.CultureInfo.InvariantCulture), finalAt = 0;
                 while (!r.IsOver && r.Time < 3000)
@@ -144,13 +146,17 @@ namespace Pit.EditorTools
                     }
                     bool ready = r.Turn >= turn && r.Balls.Count > 0;
                     if (which == "levelup" && ready && r.Mode == Mode.LevelUp) break;
-                    if (which == "crucible" && ready && r.Mode == Mode.Fuser) break;
-                    if (which != "end" && which != "levelup" && which != "crucible" && ready && r.Mode == Mode.Playing) break;
+                    if ((which == "crucible" || which == "crucible4") && ready && r.Mode == Mode.Fuser) break;
+                    if (adShot && r.Mode == Mode.Revive) break;
+                    if (which != "end" && !adShot && which != "levelup" && which != "crucible" && which != "crucible4" && ready && r.Mode == Mode.Playing) break;
                     if (r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser) { Bot.AutoPick(r); continue; }
                     Bot.Drive(r);
                     r.Step(1 / 60f);
                 }
                 if (which == "pause") r.Pause();
+                if (which == "crucible4") r.FuserExtraCard();
+                // the placeholder 0.8 s into its 2 s countdown, over the revive prompt that opened it
+                if (which == "ad") { ads.Now = 0; ads.ShowRewarded(AdConfig.Revive, ok => { }); ads.Now = 0.8f; }
                 // two frames, so eased bars and the lag bar settle and the preview camera has its target
                 for (int f = 0; f < 2; f++)
                 {
@@ -166,7 +172,7 @@ namespace Pit.EditorTools
                         world.Draw(r);
                         bool p = false;
                         screens.Hud(r, world, ref p);
-                        screens.Menus(r);
+                        if (ads.Showing) screens.AdPanel(ads); else screens.Menus(r);
                     }
                     ui.EndFrame();
                     gfx.End();

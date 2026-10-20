@@ -7,6 +7,7 @@ namespace Pit.Core
         /// predicted danger (shots, telegraphs, foes about to lunge), preferring the spot under the next falling ball.</summary>
         public static void Drive(Run r)
         {
+            if (r.Mode == Mode.Revive) { r.GiveUp(); return; }   // the bot never watches ads (ads.md §4)
             var p = r.P;
             FieldBall fall = null;
             foreach (var b in r.Field)

@@ -820,8 +820,9 @@ namespace Pit.Game
                 heroModel = model;
                 hero.Mf.sharedMesh = model != null ? model.Mesh : Models.Hero(r.Hero.Id, r.Hero.Color);
                 hero.Mr.sharedMaterial = model != null ? model.Mat : unitMat;
-                // a model fills the hero's circle, but stands no taller than one cell
-                float k = model != null ? Mathf.Min(1 / (2 * Mathf.Max(model.Half.x, model.Half.y)), 1 / (r.P.R * 2 * K * 1.15f * model.Half.z)) : 1;
+                // art-bible §4: a model is drawn 1.35 cells tall, scaled by its height only (the A-pose arms then span about
+                // 1.1 cells); the hit circle (P.R) stays gameplay-only
+                float k = model != null ? 1.35f / (r.P.R * 2 * K * 1.15f * model.Half.z) : 1;
                 hero.Body.transform.localScale = new Vector3(k, k, k);
                 heroMesh = r.Hero.Id;
             }

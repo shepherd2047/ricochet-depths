@@ -24,6 +24,9 @@ namespace Pit.Game
         public Board3D Board;
         public AudioBank Audio;
         public string SelHero = "tinker";
+        /// <summary>Set by the host when ads are on (ads.md); null hides every ad button.</summary>
+        public IAdService Ads;
+        public AdConfig AdCfg = AdConfig.Default;
 
         // HUD animation state
         float lastTime, xpShown, hpLag = 1, hpHold;
@@ -107,6 +110,22 @@ namespace Pit.Game
             return !inert && ui.Area(id, x, y, w, h, data, disabled);
         }
 
+        /// <summary>
+        /// A rewarded-ad button: the play icon marks it as an ad, the label sits right of it. Greyed with "Ad not
+        /// available" under it when no ad can load (ads.md §3).
+        /// </summary>
+        bool AdBtn(string id, string placement, float x, float y, float w, float h, string label, float pt, bool primary = false)
+        {
+            bool ready = Ads != null && Ads.RewardedReady(placement);
+            bool held = ready && ui.Held(id);
+            bool hit = Btn(id, x, y, w, h, null, 0, primary, disabled: !ready);
+            float dy = held ? 2 * A : 0, cy = y + (h - 2 * A) / 2 + dy;
+            g.SkinAt("ic_play", x + 4 * A, cy - 8 * A, 1, ready ? Col.White : Col.A(Col.White, 0.4f));
+            T(label, x + 20 * A, cy - (h - 2 * A) / 2, w - 22 * A, h - 2 * A, pt, ready ? Cream : Faint, Align.Center, true);
+            if (!ready) T("Ad not available", x - 20 * A, y + h + A, w + 40 * A, 9 * A, 9, Faint);
+            return hit && ready;
+        }
+
         /// <summary>A ball icon: the atlas sprite if pit-ui drew one for it, else the procedural one. True for a sprite.</summary>
         bool BallIcon(string id, float x, float y, float size, string fused = null)
         {
@@ -177,7 +196,7 @@ namespace Pit.Game
             if (r != lastRun) { lastRun = r; xpShown = 0; hpLag = 1; hpHold = 0; lastLevel = -1; partner = null; }
             g.Cur = Layer.Hud;
             var p = r.P;
-            bool modal = r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser || r.Mode == Mode.Paused || r.IsOver;
+            bool modal = r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser || r.Mode == Mode.Paused || r.Mode == Mode.Revive || r.IsOver;
 
             FloatNumbers(r);
 
@@ -331,6 +350,7 @@ namespace Pit.Game
             if (r.Mode == Mode.LevelUp && r.Menu != null) { Dim(0.72f); LevelUp(r); Slots(r); }
             else if (r.Mode == Mode.Fuser && r.Menu != null) { Dim(0.72f); Fuser(r); Slots(r); }
             else if (r.Mode == Mode.Paused) { Dim(0.78f); return Pause(r); }
+            else if (r.Mode == Mode.Revive) { Dim(0.80f); Revive(r); }
             else if (r.IsOver) { Dim(0.80f); return End(r); }
             return Nav.None;
         }
@@ -360,22 +380,28 @@ namespace Pit.Game
                 if (ui.Area("pick", cx, cy, 160 * A, 52 * A, i)) { r.ChooseLevel(i); return; }
             }
             int cost = r.RerollCost;
-            if (Btn("reroll", X(46), MY(232), 88 * A, 24 * A, "REROLL", 13, cost: cost.ToString(), disabled: r.Gold < cost)) r.RerollLevel();
+            // ads.md R2: a free reroll beside the paid one, 3 per run
+            bool adReroll = Ads != null && r.AdRerolls < AdCfg.RerollsPerRun;
+            if (adReroll && AdBtn("ad-reroll", AdConfig.Reroll, X(8), MY(232), 48 * A, 24 * A, "FREE", 12))
+                Ads.ShowRewarded(AdConfig.Reroll, ok => { if (ok && r.Mode == Mode.LevelUp) r.RerollFree(); });
+            float rx = adReroll ? 60 : 46, rw = adReroll ? 74 : 88;
+            if (Btn("reroll", X(rx), MY(232), rw * A, 24 * A, "REROLL", adReroll ? 12 : 13, cost: cost.ToString(), disabled: r.Gold < cost)) r.RerollLevel();
             // not in the pit-ui mockup: the game lets you bank a level-up for later (the pulsing LEVEL +n button)
             if (Btn("later", X(138), MY(232), 24 * A, 24 * A, null, 0, icon: "ic_clock")) r.LaterLevel();
         }
 
         /// <summary>A crucible option card (UI-SPEC §7.4); an unavailable one is greyed and takes no taps.</summary>
-        bool Option(string id, int row, string title, string desc, bool on, System.Action<float, float> icons)
+        /// <summary>compact: the four-card crucible (ads.md R3), 40 px cards at a 41 px pitch.</summary>
+        bool Option(string id, int row, string title, string desc, bool on, System.Action<float, float> icons, bool compact = false)
         {
-            float cx = X(10), cy = MY(66 + 54 * row);
-            g.Skin(on ? "card_copper" : "card_disabled", cx, cy, 160 * A, 52 * A, Col.White);
-            if (on && ui.Held(id)) g.Skin("select", cx - 2 * A, cy - 2 * A, 164 * A, 56 * A, Col.White);
-            g.Skin("inset", cx + 6 * A, cy + 10 * A, 62 * A, 36 * A, Col.White);
-            if (icons != null) icons(cx, cy);
-            T(title, cx + 74 * A, cy + 7 * A, 80 * A, 12 * A, 13, on ? Cream : Faint, Align.Left, true);
-            Para(desc, cx + 74 * A, cy + 21 * A, 80 * A, 10, on ? Body : Faint, 3);
-            return ui.Area(id, cx, cy, 160 * A, 52 * A, 0, !on);
+            float h = compact ? 40 : 52, cx = X(10), cy = MY(66 + (compact ? 41 : 54) * row), sh = compact ? -6 * A : 0;
+            g.Skin(on ? "card_copper" : "card_disabled", cx, cy, 160 * A, h * A, Col.White);
+            if (on && ui.Held(id)) g.Skin("select", cx - 2 * A, cy - 2 * A, 164 * A, (h + 4) * A, Col.White);
+            g.Skin("inset", cx + 6 * A, cy + (h - 36) / 2 * A, 62 * A, 36 * A, Col.White);
+            if (icons != null) icons(cx, cy + sh);
+            T(title, cx + 74 * A, cy + (compact ? 4 : 7) * A, 80 * A, 12 * A, 13, on ? Cream : Faint, Align.Left, true);
+            Para(desc, cx + 74 * A, cy + (compact ? 16 : 21) * A, 80 * A, 10, on ? Body : Faint, compact ? 2 : 3);
+            return ui.Area(id, cx, cy, 160 * A, h * A, 0, !on);
         }
 
         void Lock(float cx, float cy) { g.SkinAt("ic_lock", cx + 29 * A, cy + 20 * A, 1, Col.A(Col.White, 0.5f)); }
@@ -390,12 +416,13 @@ namespace Pit.Game
                 OwnedBall[] first = null; int pairCount = 0;
                 foreach (var p in pairs) if (p[0].Uid < p[1].Uid) { pairCount++; if (first == null) first = p; }
                 var recs = r.EvolveRecipes();
+                bool four = m.ExtraFree > 0;
                 if (Option("fz-free", 0, "FREE UPGRADES", "Level up 1-5 of your balls and items at random.", true, (cx, cy) =>
                 {
                     int n = 0;
                     foreach (var b in r.Balls) { if (n >= 3) break; if (b.Fused == null && b.Level < 3) BallIcon(b.Id, cx + (13 + 16 * n++) * A, cy + 20 * A, 16 * A); }
                     foreach (var it in r.Items) { if (n >= 3) break; if (it.Level < 3) ItemIcon(it.Id, cx + (13 + 16 * n++) * A, cy + 20 * A, 16 * A); }
-                })) { r.FuserFree(); return; }
+                }, four)) { r.FuserFree(); return; }
                 if (Option("fz-combo", 1, "COMBINE", pairCount > 0 ? "Merge two Lv 3 balls. The result stops levelling." : "Needs two Lv 3 balls that can merge.",
                     pairCount > 0, (cx, cy) =>
                 {
@@ -403,16 +430,26 @@ namespace Pit.Game
                     BallIcon(first[0].Id, cx + 17 * A, cy + 20 * A, 16 * A);
                     g.SkinAt("ic_plus", cx + 31 * A, cy + 20 * A, 1, Col.White);
                     BallIcon(first[1].Id, cx + 42 * A, cy + 20 * A, 16 * A);
-                })) { m.View = FuserView.Combo; m.Host = null; partner = null; return; }
+                }, four)) { m.View = FuserView.Combo; m.Host = null; partner = null; return; }
                 string evoDesc = "No recipe ready. Max the right pieces first.";
                 if (recs.Count > 0) evoDesc = RecipeParts(recs[0]) + " become " + RecipeName(recs[0]) + "." + (recs.Count > 1 ? " (+" + (recs.Count - 1) + " more)" : "");
                 if (Option("fz-evo", 2, "EVOLVE", evoDesc, recs.Count > 0, (cx, cy) =>
                 {
                     if (recs.Count == 0) { Lock(cx, cy); return; }
                     RecipeIcons(recs[0], cx, cy);
-                })) { m.View = FuserView.Evo; return; }
+                }, four)) { m.View = FuserView.Evo; return; }
+                // ads.md R3: the ad's 4th card, Free Upgrades rolled again with its count shown
+                if (four && Option("fz-extra", 3, m.ExtraFree + " FREE UPGRADE" + (m.ExtraFree > 1 ? "S" : ""),
+                    "Bonus roll: level up " + m.ExtraFree + " of your balls and items at random.", true, (cx, cy) =>
+                {
+                    g.SkinAt("ic_play", cx + 13 * A, cy + 20 * A, 1, Col.White);
+                    g.SkinAt("ic_plus", cx + 31 * A, cy + 20 * A, 1, Col.White);
+                }, true)) { r.FuserFree(m.ExtraFree); return; }
                 bool canFuse = pairCount > 0 || recs.Count > 0;
-                if (Btn("fz-skip", X(46), MY(232), 88 * A, 24 * A, "SKIP", 13, cost: canFuse ? "+50" : null)) { r.FuserAbandon(); return; }
+                bool adCard = Ads != null && !m.ExtraAdUsed && !four && AdCfg.ExtraCardsPerCrucible > 0;
+                if (adCard && AdBtn("ad-card", AdConfig.Crucible, X(8), MY(232), 74 * A, 24 * A, "+1 OPTION", 11))
+                    Ads.ShowRewarded(AdConfig.Crucible, ok => { if (ok && r.Mode == Mode.Fuser && r.Menu == m) { m.ExtraAdUsed = true; r.FuserExtraCard(); } });
+                if (Btn("fz-skip", X(adCard ? 86 : 46), MY(232), (adCard ? 80 : 88) * A, 24 * A, "SKIP", 13, cost: canFuse ? "+50" : null)) { r.FuserAbandon(); return; }
             }
             else if (m.View == FuserView.Combo) Combine(r, m);
             else if (m.View == FuserView.Evo)
@@ -573,6 +610,40 @@ namespace Pit.Game
             if (Btn("snd", sx, sy, 24 * A, 24 * A, null, 0, icon: SoundOn ? "ic_sound" : "ic_mute") && Audio != null) Audio.SoundOn = !Audio.SoundOn;
             if (Btn("mus", mx, my, 24 * A, 24 * A, null, 0, icon: "ic_music", iconTint: MusicOn ? Col.White : Col.A(Col.White, 0.4f)) && Audio != null)
                 Audio.MusicOn = !Audio.MusicOn;
+        }
+
+        /// <summary>ads.md R1: the revive prompt (spec §1 state list), once per run.</summary>
+        void Revive(Run r)
+        {
+            T("OUT OF HP", X(10), MY(60), 160 * A, 26 * A, 28, RedHi, Align.Center, true);
+            g.Skin("panel", X(14), MY(96), 152 * A, 96 * A, Col.White);
+            g.SkinAt("ic_heart_s", X(86), MY(108), 1, Col.White);
+            Para("Watch an ad to get back up with " + Mathf.RoundToInt(AdCfg.ReviveHp * 100) + "% HP. The " + AdCfg.ReviveRows +
+                 " rows nearest you are cleared.", X(24), MY(124), 132 * A, 12, Body, 4, Align.Center);
+            Para("Once per run.", X(24), MY(172), 132 * A, 10, Muted, 1, Align.Center);
+            if (AdBtn("ad-revive", AdConfig.Revive, X(26), MY(204), 128 * A, 28 * A, "WATCH AD · REVIVE", 13, primary: true))
+                Ads.ShowRewarded(AdConfig.Revive, ok => { if (ok && r.Mode == Mode.Revive) r.Revive(AdCfg.ReviveHp, AdCfg.ReviveRows); });
+            if (Btn("giveup", X(46), MY(248), 88 * A, 24 * A, "GIVE UP", 13)) r.GiveUp();
+        }
+
+        /// <summary>
+        /// The placeholder ad (ads.md §4): black, "AD", the placement and a 2 s countdown. Rewarded: Skip during the
+        /// countdown, × after it. Interstitial: closes itself. Drawn over everything; the host stops the run meanwhile.
+        /// </summary>
+        public void AdPanel(PlaceholderAds ads)
+        {
+            g.Cur = Layer.Menu;
+            if (!g.Skin("white", -10, -10, g.W + 20, g.H + 20, Col.Hex(0x000000))) g.Rect(-10, -10, g.W + 20, g.H + 20, Col.Hex(0x000000));
+            T("AD", 0, MY(110), g.W, 40 * A, 48, Cream, Align.Center, true);
+            T((ads.Rewarded ? "rewarded · " : "interstitial · ") + ads.Placement, 0, MY(152), g.W, 12 * A, 11, Muted);
+            float left = ads.Left;
+            if (left > 0) T(Mathf.CeilToInt(left).ToString(), 0, MY(172), g.W, 20 * A, 24, Gold, Align.Center, true);
+            if (ads.Rewarded)
+            {
+                if (left > 0) { if (Btn("ad-skip", X(60), MY(232), 60 * A, 24 * A, "SKIP", 13)) ads.Skip(); }
+                else if (Btn("ad-close", g.W - 32 * A, TY(24), 24 * A, 24 * A, null, 0, icon: "ic_close")) ads.Close();
+            }
+            if (ads.FailLoads) T("AD LOADS FAIL (F8)", 0, BY(284), g.W, 12 * A, 9, RedHi);
         }
 
         Nav End(Run r)

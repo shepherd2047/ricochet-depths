@@ -61,6 +61,10 @@ namespace Pit.Core
 
         public int Gold, Kills, Rerolls, PointsUsed, LastFreeCount, PendingFuser;
         public bool AutoMenu = true;
+        // ads.md: the host turns rewarded ads on (bot runs leave them off, so balance sweeps compare with earlier ones).
+        // With them on, death first opens the revive prompt (Mode.Revive, sim frozen) while the revive is unused.
+        public bool AdsOn, ReviveUsed, AdWatched;
+        public int AdRerolls;
         public float Shake;
         public Menu Menu;
         public Banner Banner;

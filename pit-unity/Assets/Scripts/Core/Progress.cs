@@ -46,7 +46,7 @@ namespace Pit.Core
 
         public List<Option> RollLevelOptions()
         {
-            var rng = new Rng(Seed + 7919L * PointsUsed + 104729L * Rerolls + 13);
+            var rng = new Rng(Seed + 7919L * PointsUsed + 104729L * Rerolls + 1299709L * AdRerolls + 13);
             var opts = new List<Option>();
             var seen = new HashSet<string>();
             for (int n = 0; n < 3; n++)
@@ -121,6 +121,15 @@ namespace Pit.Core
         {
             if (Menu == null || Gold < RerollCost) return false;
             Stats.GoldSpent += RerollCost; Gold -= RerollCost; Rerolls++;
+            Menu.Options = RollLevelOptions();
+            return true;
+        }
+
+        /// <summary>Rewarded reroll (ads.md R2): free, and the paid reroll price doesn't move.</summary>
+        public bool RerollFree()
+        {
+            if (Menu == null || Menu.Type != MenuType.LevelUp) return false;
+            AdRerolls++; AdWatched = true;
             Menu.Options = RollLevelOptions();
             return true;
         }
@@ -202,14 +211,30 @@ namespace Pit.Core
             Mode = Mode.Fuser;
         }
 
-        public void FuserFree()
+        /// <summary>The Free Upgrades piece count (spec §5.4 ①), with the streak corrections.</summary>
+        int RollFreeCount()
         {
-            if (Menu == null) return;
             double r = R.NextD();
             int n = r < 0.25 ? 1 : r < 0.6 ? 2 : r < 0.8 ? 3 : r < 0.95 ? 4 : 5;
             if (LastFreeCount == 1) n += 1;
             if (LastFreeCount == 5) n = System.Math.Min(n, 4);
-            n = M.Clamp(n, 1, 5);
+            return M.Clamp(n, 1, 5);
+        }
+
+        /// <summary>Crucible R3 (ads.md): reveals a 4th card, Free Upgrades rolled again under the same rules, count shown.</summary>
+        public void FuserExtraCard()
+        {
+            if (Menu == null || Menu.Type != MenuType.Fuser || Menu.ExtraFree > 0) return;
+            Menu.ExtraFree = RollFreeCount(); AdWatched = true;
+        }
+
+        public void FuserFree() { FuserFree(0); }
+
+        /// <summary>Free Upgrades; count > 0 applies a pre-rolled count (the ad card) instead of rolling.</summary>
+        public void FuserFree(int count)
+        {
+            if (Menu == null) return;
+            int n = count > 0 ? count : RollFreeCount();
             var cand = new List<object>();
             foreach (var b in Balls) if (b.Level < 3 && b.Fused == null) cand.Add(b);
             foreach (var it in Items) if (it.Level < 3) cand.Add(it);

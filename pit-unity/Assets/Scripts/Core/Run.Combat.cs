@@ -313,10 +313,56 @@ namespace Pit.Core
             if (P.Hp <= 0)
             {
                 P.Hp = 0;
-                Mode = Mode.Dying; ModeT = 2;
-                foreach (var b in Field) b.Recall = true;
                 Stats.Log.Add("died turn " + Turn + " t=" + (int)Time + " to " + src);
+                if (AdsOn && !ReviveUsed) { Mode = Mode.Revive; return; }
+                Die();
             }
+        }
+
+        void Die()
+        {
+            Mode = Mode.Dying; ModeT = 2;
+            foreach (var b in Field) b.Recall = true;
+        }
+
+        /// <summary>
+        /// Rewarded revive (ads.md R1, once per run): back to hpFrac of max HP, and the foes in the `rows` occupied rows
+        /// nearest the hero are removed without rewards (no gold, xp or kill count). Bosses and their parts stay.
+        /// </summary>
+        public void Revive(float hpFrac, int rows)
+        {
+            if (Mode != Mode.Revive) return;
+            ReviveUsed = true; AdWatched = true;
+            P.Hp = System.Math.Max(1, M.Ceil(P.MaxHp * hpFrac));
+            var rowIds = new List<int>();
+            foreach (var e in Enemies)
+            {
+                if (e.Dead || e.Boss || e.Parent != null) continue;
+                int row = (int)System.Math.Floor((e.Bottom - 0.01f) / CELL);
+                if (!rowIds.Contains(row)) rowIds.Add(row);
+            }
+            rowIds.Sort();
+            rowIds.Reverse();
+            if (rowIds.Count > rows) rowIds.RemoveRange(rows, rowIds.Count - rows);
+            foreach (var e in Enemies.ToArray())
+            {
+                if (e.Dead || e.Boss || e.Parent != null) continue;
+                if (!rowIds.Contains((int)System.Math.Floor((e.Bottom - 0.01f) / CELL))) continue;
+                Burst(e.Cx, e.Cy, e.Color, 6);
+                RemoveStack(e);
+            }
+            Shots.Clear();
+            Mode = Mode.Playing;
+            Text(P.X, P.Y - 0.9f, "REVIVED", 0x6dff8e, 1.2f);
+            Stats.Log.Add("revived turn " + Turn);
+        }
+
+        /// <summary>Declines the revive: the run ends as it would have without ads.</summary>
+        public void GiveUp()
+        {
+            if (Mode != Mode.Revive) return;
+            ReviveUsed = true;
+            Die();
         }
 
         void OnBossDead(Enemy e)

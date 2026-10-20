@@ -6,7 +6,7 @@ namespace Pit.Core
     /// <summary>Sound cues the sim raises; the view drains Run.Sounds each frame and maps them to clips.</summary>
     public enum Sfx { Launch, Wall, Hit, Crit, Catch, Death, Hurt, LevelUp, Xp }
 
-    public enum Mode { Title, Intro, Playing, LevelUp, Fuser, Paused, Dying, GameOver, Clearing, Victory }
+    public enum Mode { Title, Intro, Playing, LevelUp, Fuser, Paused, Dying, GameOver, Clearing, Victory, Revive }
     public enum BallState { Ready, Field, Cool }
 
     public sealed class Status
@@ -176,6 +176,9 @@ namespace Pit.Core
         public OwnedBall Host;
         public string Title;
         public List<ResultLine> Results;
+        /// <summary>Crucible R3 (ads.md): the ad's 4th card, a second Free Upgrades roll of this many pieces (0 = none).</summary>
+        public int ExtraFree;
+        public bool ExtraAdUsed;
     }
 
     public sealed class Banner { public string Title, Sub; public uint Color; public float T; }

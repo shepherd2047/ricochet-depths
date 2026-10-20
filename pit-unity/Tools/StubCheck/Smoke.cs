@@ -18,8 +18,9 @@ static class Smoke
         var gfx = new Gfx(new GameObject("root").transform, board.WorldRoot);
         var ui = new Ui(gfx);
         var world = new WorldView(gfx);
-        var screens = new Screens(gfx, ui) { SafeTop = 20, SafeBottom = 10, Board = board };
-        int frames = 0, errors = 0;
+        var ads = new PlaceholderAds(AdConfig.Default);
+        var screens = new Screens(gfx, ui) { SafeTop = 20, SafeBottom = 10, Board = board, Ads = ads };
+        int frames = 0, errors = 0, revives = 0;
         Action<Action> frame = draw =>
         {
             gfx.Begin(360, 740, 3);
@@ -58,13 +59,23 @@ static class Smoke
         foreach (var h in Content.Heroes)
             for (int s = 1; s <= seeds; s++)
             {
-                var r = new Run(s * 31 + 7, h.Id);
+                // odd seeds run with ads on: the revive prompt is drawn, then taken (as if watched)
+                var r = new Run(s * 31 + 7, h.Id) { AdsOn = s % 2 == 1 };
                 world.Units3D = s % 2 == 1;
                 try
                 {
                     int step = 0;
                     while (!r.IsOver && r.Time < 1500)
                     {
+                        if (r.Mode == Mode.Revive)
+                        {
+                            frame(() => screens.Menus(r));
+                            ads.ShowRewarded(AdConfig.Revive, ok => { if (ok) r.Revive(ads.Cfg.ReviveHp, ads.Cfg.ReviveRows); });
+                            ads.Now += 1; frame(() => screens.AdPanel(ads)); ads.Now += 1.5f; frame(() => screens.AdPanel(ads)); ads.Close();
+                            if (r.Mode != Mode.Playing) throw new Exception("revive did not resume the run");
+                            revives++;
+                            continue;
+                        }
                         bool menu = r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser;
                         if (menu || step % 6 == 0)
                             frame(() =>
@@ -84,6 +95,7 @@ static class Smoke
                                 if (r.ComboPairs().Count > 0) { r.Menu.View = FuserView.Combo; frame(() => screens.Menus(r)); r.Menu.Host = r.ComboPairs()[0][0]; frame(() => screens.Menus(r)); r.Menu.Host = null; }
                                 if (r.EvolveRecipes().Count > 0) { r.Menu.View = FuserView.Evo; frame(() => screens.Menus(r)); }
                                 r.Menu.View = FuserView.Main;
+                                if (r.AdsOn) { r.FuserExtraCard(); frame(() => screens.Menus(r)); r.Menu.ExtraFree = 0; }
                             }
                             Bot.AutoPick(r);
                             if (r.Menu != null && r.Menu.View == FuserView.Result) frame(() => screens.Menus(r));
@@ -140,7 +152,7 @@ static class Smoke
             if (m.VertexCount > 2000) { errors++; Console.WriteLine($"BUDGET wall {m.name}: {m.VertexCount} > 2000"); }
         int cellsUsed = PixelArt.CellOf("ring") + 1;
         Console.WriteLine($"verts: foe max {Models.MaxFoeVerts}, boss max {Models.MaxBossVerts}, hero {Models.HeroVerts}, wall {Models.WallModules()[0].VertexCount}; atlas cells used {cellsUsed}/256");
-        Console.WriteLine($"frames {frames}  errors {errors}  gameobjects {GameObject.Created}");
+        Console.WriteLine($"revives {revives}  frames {frames}  errors {errors}  gameobjects {GameObject.Created}");
         return errors > 0 ? 1 : 0;
     }
 

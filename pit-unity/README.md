@@ -21,7 +21,7 @@ The game builds itself at runtime (`GameRoot.Boot`, `[RuntimeInitializeOnLoadMet
 ## Demo content
 
 - **Run flow.** Title → hero select → waves → Fusers on turns 15/30/45/75/90/105/140/160 → **Bellwarden** at turn 60 → **Hivekeeper** at turn 120 → **Mawking**, the final boss (about 15 min). After that come victory or game over, then Play again or Change hero.
-- **No meta.** m = 1 and there's no revive. Rerolls cost gold. There are 3 level-up options, 4 ball slots and 4 item slots.
+- **No meta.** m = 1. Rerolls cost gold (or one rewarded ad, see Ads). There are 3 level-up options, 4 ball slots and 4 item slots.
 - **Balls.** 14 base balls and 12 evolutions, with burn, frostfire, poison, bleed, freeze, slow, blind, charm, leech, chain, row and column beams, quake, bomb, nuke, flash, aura, egg and split. Recall, catch and side balls follow the spec.
 - **Foes.** 22 types, covering:
   - stacking riders;
@@ -67,6 +67,18 @@ The simulation is still 2D. The look follows style.md:
   - Numbers on the board use a 3×5 pixel font.
 - **Bloom.** Balls, shots, beams and particles sit on the `Glow` layer, drawn ×2.4 in HDR. Bloom's threshold (1.05) is reached only by that layer and emissive eyes.
 - **UI.** The UI stays on its own orthographic camera, stacked on top as a URP overlay.
+
+## Ads (from `../ballpit-spec/ads.md`)
+
+- **Service.** The game talks only to `IAdService` (`Game/Ads.cs`); `AdConfig` holds every cap and interval. `PlaceholderAds` is the current implementation: a black full-screen "AD" panel with the placement and a 2 s countdown. Rewarded ads have Skip during the countdown (not watched) and × after it (watched); interstitials close themselves. A TikTok implementation replaces it later.
+- **Rewarded.** Each reward is given only when the ad was watched to the end; closing it early leaves the button there. Buttons carry `ic_play` as the ad mark (pit-ui has no AD icon yet), hide at their cap, and grey out with "Ad not available" when no ad loads.
+  - **R1 revive.** At 0 HP the run enters `Mode.Revive`: Watch ad · Revive or Give up. A watched ad restores 50% HP and clears the 2 occupied rows nearest the player (no rewards). Once per run.
+  - **R2 free reroll.** "FREE" next to the paid reroll on level-up, 3 per run.
+  - **R3 +1 option.** Next to Skip in the Crucible, once per Crucible: a 4th card, Free Upgrades rolled a second time with its count shown; taking it applies that roll instead.
+- **Interstitial.** Only on the results screen's Retry or Home: never after the first run, never in the first 180 s, at least 180 s apart, and not in a run where a rewarded ad was watched.
+- **While an ad shows** the run does not step, input goes only to the ad, and `AudioListener.pause` is set.
+- **Testing.** F8 (Editor and development builds) makes every load fail. The dev bot always gives up. `PitCapture -pitScreen revive|ad|crucible4` renders the prompt, the placeholder and the 4-card Crucible.
+- **Not done:** gold doubling (ads.md leaves it out), and the real TikTok ad calls.
 
 ## Sound (from `../pit-audio/DELIVERY.md`, batch 1)
 
