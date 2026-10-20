@@ -239,6 +239,14 @@ namespace Pit.EditorTools
                     Debug.Log("PitCapture: vfx " + vfxBall + " hits " + board.VfxHitCount + " chains " + board.VfxChainCount + " rows " + board.VfxRowCount +
                               " burning " + board.VfxBurning + " frozen " + board.VfxFrozen);
                 }
+                // -pitGems: a row of each drop (gems of the three tiers, gold, heal, fuser) above the hero, to judge their look
+                if (Arg("-pitGems", null) != null)
+                {
+                    var kinds = new[] { DropKind.Gem, DropKind.Gem, DropKind.Gem, DropKind.Gold, DropKind.Heal, DropKind.Fuser };
+                    var vals = new[] { 1, 15, 150, 5, 8, 1 };
+                    for (int i = 0; i < kinds.Length; i++)
+                        r.Drops.Add(new Drop { Kind = kinds[i], X = 0.6f + i * (r.Bw - 1.2f) / (kinds.Length - 1), Y = r.P.Y - 2.2f, V = vals[i] });
+                }
                 if (which == "pause") r.Pause();
                 if (which == "crucibleplus") r.FuserAdUpgrade();
                 // the placeholder 0.8 s into its 2 s countdown, over the revive prompt that opened it
