@@ -414,6 +414,11 @@ namespace Pit.Game
             }
         }
         static readonly Dictionary<string, Asset> assets = new Dictionary<string, Asset>();
+        /// <summary>Models that share a theme atlas (pit-art monster_lib: &lt;atlas&gt;_albedo + &lt;atlas&gt;_emissive).</summary>
+        static readonly Dictionary<string, string> Atlas = new Dictionary<string, string>
+        {
+            { "enemy_shambler", "enemy_theme1" }, { "enemy_brute", "enemy_theme1" }, { "enemy_spitter", "enemy_theme1" },
+        };
 
         /// <summary>
         /// Loads Resources/Models/&lt;name&gt;.bytes (written by Tools/glb_to_bytes.py from the art team's GLB, Blender axes:
@@ -459,9 +464,14 @@ namespace Pit.Game
             m.SetVertices(pos); m.SetNormals(nor); m.SetColors(col); m.SetUVs(0, uv); m.SetTriangles(tri, 0, true);
             var clips = Clips(name, s, uv, col, tri);
             var mat = new Material(shader) { name = name };
-            mat.SetTexture("_MainTex", Resources.Load<Texture2D>("Models/" + name + "_albedo"));
+            string tex;
+            if (!Atlas.TryGetValue(name, out tex)) tex = name;
+            mat.SetTexture("_MainTex", Resources.Load<Texture2D>("Models/" + tex + "_albedo"));
             mat.SetFloat("_Textured", 1);
-            mat.SetFloat("_TexEmit", glow ? 1 : 0);
+            // a delivered emissive map replaces the light-albedo guess (_TexEmit 2: the glow is the map's colour)
+            var emis = glow ? Resources.Load<Texture2D>("Models/" + tex + "_emissive") : null;
+            if (emis != null) mat.SetTexture("_EmisMap", emis);
+            mat.SetFloat("_TexEmit", emis != null ? 2 : glow ? 1 : 0);
             a = new Asset
             {
                 Mesh = m, Mat = mat,

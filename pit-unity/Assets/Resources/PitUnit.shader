@@ -4,7 +4,8 @@
 // pushed over the bloom threshold and tinted by _EmisTint. Written for URP.
 // Delivered models (_Textured = 1) take their colour from _MainTex instead and use uv as texture coordinates; with
 // _TexEmit = 1 their light painted accents (the foes' eyes, seams and flues, there is no emissive map yet) glow in
-// _EmisColor. _EmisMap (scenery: the window panes) adds its colour × _EmisMapGain.
+// _EmisColor; with _TexEmit = 2 the glow is _EmisMap's colour instead (foes with a delivered emissive map). Otherwise
+// _EmisMap (scenery: the window panes) adds its colour × _EmisMapGain.
 // Additional lights (the wall fills and the furnace spot) are per-pixel Lambert without shadows. Fog covers everything
 // past the far-wall line; the units' own glow (eyes, markings) takes half of it so waves above the board glint through.
 Shader "Pit/Unit"
@@ -122,10 +123,12 @@ Shader "Pit/Unit"
 
                 float3 albedo = i.color.rgb;
                 float emit = i.uv.x;
+                float3 emisCol = _EmisColor.rgb;
                 if (_Textured > 0.5)
                 {
                     albedo *= SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv).rgb;
-                    emit = _TexEmit * smoothstep(0.26, 0.42, dot(albedo, float3(0.3, 0.59, 0.11)));
+                    if (_TexEmit > 1.5) { emisCol = SAMPLE_TEXTURE2D(_EmisMap, sampler_EmisMap, i.uv).rgb; emit = 1; }
+                    else emit = _TexEmit * smoothstep(0.26, 0.42, dot(albedo, float3(0.3, 0.59, 0.11)));
                 }
                 float bn = noise3(i.positionOS * 7.0 + _Seed * 13.17);
                 albedo = lerp(albedo, float3(0.32, 0.02, 0.05), _Bleed * smoothstep(0.52, 0.66, bn));
@@ -147,7 +150,7 @@ Shader "Pit/Unit"
                 float3 ice = lerp(float3(0.16, 0.42, 0.5), float3(0.8, 0.98, 0.92), rim) * (0.6 + 0.4 * ndl);
                 col = lerp(col, ice, _Ice * 0.8);
 
-                float3 glow = (_Textured > 0.5 ? _EmisColor.rgb : albedo) * emit * _EmisBoost * _EmisTint.rgb;
+                float3 glow = (_Textured > 0.5 ? emisCol : albedo) * emit * _EmisBoost * _EmisTint.rgb;
                 if (_EmisMapGain > 0) col += SAMPLE_TEXTURE2D(_EmisMap, sampler_EmisMap, i.uv).rgb * _EmisMapGain;
                 col = lerp(col, float3(1, 1, 1), _Flash * 0.85);
                 glow *= 1 - _Flash * 0.85;

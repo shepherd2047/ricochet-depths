@@ -72,7 +72,14 @@ namespace Pit.Game
             public bool Seen;
             public float DieT = -1;
             public Vector3 Scale;
+            // baked foe clips (pit-art monster_lib → Tools/bake_hero_anim.py at 12 fps); null for code-built foes
+            public Dictionary<string, Models.Clip> Clips;
+            public string Clip;
+            public float ClipAt;
         }
+
+        // the Attack clip's release frame: pit-art report, projectile on frame 8 of 16 at 24 fps
+        const float AttackRelease = 8 / 24f;
 
         readonly Dictionary<int, View> live = new Dictionary<int, View>();
         readonly Stack<View> pool = new Stack<View>();
@@ -653,7 +660,7 @@ namespace Pit.Game
             View v;
             if (live.TryGetValue(id, out v)) return v;
             v = pool.Count > 0 ? pool.Pop() : NewView();
-            v.Id = id; v.DieT = -1;
+            v.Id = id; v.DieT = -1; v.Clips = null; v.Clip = null;
             if (!v.Go.activeSelf) v.Go.SetActive(true);
             for (int i = 0; i < 3; i++) if (v.Plates[i].activeSelf) v.Plates[i].SetActive(false);
             live[id] = v;
@@ -704,6 +711,8 @@ namespace Pit.Game
                 string mk;
                 var model = !e.Boss && !e.Pod && FoeModels.TryGetValue(e.Type, out mk) ? Models.Model(mk, false, true, unitShader) : null;
                 Mesh mesh = model != null ? model.Mesh : MeshFor(e);
+                v.Clips = model != null ? model.Clips : null;
+                if (v.Clips != null) mesh = FoeClip(v, e, now);
                 if (v.Mf.sharedMesh != mesh) { v.Mf.sharedMesh = mesh; v.Mr.sharedMaterial = model != null ? model.Mat : unitMat; }
 
                 float cx = e.Cx + e.Ox, cy = e.Cy + e.Oy, z = 0;
@@ -713,11 +722,11 @@ namespace Pit.Game
 
                 // stepped poses: a two-frame idle breath, a hop while stepping, a crouch while winding up
                 float phase = Step(now + e.Id * 0.137f);
-                bool pose2 = Mathf.Repeat(phase, 1f) >= 0.5f;
-                float sxy = pose2 ? 1.03f : 1, sz = pose2 ? 0.93f : 1;
-                if (e.StepProg >= 0) { z -= 0.12f * Mathf.Sin(Mathf.Clamp01(e.StepProg) * Mathf.PI); }
-                if (e.Atk != null && !e.Atk.Lunge) { sxy *= 1.06f; sz *= 0.85f; }
-                if (e.Atk != null && e.Atk.Lunge) { sz *= 1.1f; }
+                bool pose2 = Mathf.Repeat(phase, 1f) >= 0.5f, posed = v.Clips == null;   // baked clips carry their own poses
+                float sxy = pose2 && posed ? 1.03f : 1, sz = pose2 && posed ? 0.93f : 1;
+                if (e.StepProg >= 0 && posed) { z -= 0.12f * Mathf.Sin(Mathf.Clamp01(e.StepProg) * Mathf.PI); }
+                if (e.Atk != null && !e.Atk.Lunge && posed) { sxy *= 1.06f; sz *= 0.85f; }
+                if (e.Atk != null && e.Atk.Lunge && posed) { sz *= 1.1f; }
 
                 float fw = e.W * K * 0.94f, fh = e.H * K * 0.94f, fz = Mathf.Sqrt(e.W * e.H) * K * 0.94f;
                 if (e.Boss && !e.Pod) { fw = e.W * K; fh = e.H * K; }
@@ -753,6 +762,16 @@ namespace Pit.Game
                 if (v.Seen) continue;
                 if (v.DieT < 0) v.DieT = 0;
                 v.DieT += Time.unscaledDeltaTime;
+                Models.Clip death;
+                if (v.Clips != null && v.Clips.TryGetValue("Death", out death))
+                {
+                    // the baked Death plays through (it shrinks on its own), then the unit is gone
+                    if (v.DieT >= death.Length + 0.1f) { v.Go.SetActive(false); gone.Add(kv.Key); continue; }
+                    v.Mf.sharedMesh = death.At(v.DieT);
+                    v.Mpb.SetFloat("_Flash", 0);
+                    v.Mr.SetPropertyBlock(v.Mpb);
+                    continue;
+                }
                 float k = 1 - Step(v.DieT) / 0.3f;
                 if (k <= 0) { v.Go.SetActive(false); gone.Add(kv.Key); continue; }
                 v.Go.transform.localScale = new Vector3(v.Scale.x * k, v.Scale.y * k, v.Scale.z * k * k);
@@ -760,6 +779,33 @@ namespace Pit.Game
                 v.Mr.SetPropertyBlock(v.Mpb);
             }
             foreach (var id in gone) { pool.Push(live[id]); live.Remove(id); }
+        }
+
+        /// <summary>
+        /// The baked foe clip for this frame, stepped (no blending, style.md §6). Attack (a melee wind-up, or a shot due
+        /// within the release time so the projectile leaves on the release frame) and Hit play to their end; Move while
+        /// stepping or entering; Idle otherwise, its phase offset per foe.
+        /// </summary>
+        static Mesh FoeClip(View v, Enemy e, float now)
+        {
+            string want = "Idle";
+            float at = now;
+            bool shotDue = e.Def != null && e.Def.ShootEvery != null && e.ShootT > 0 && e.ShootT <= AttackRelease;
+            if (e.Atk != null) want = "Attack";
+            else if (shotDue) { want = "Attack"; at = now - (AttackRelease - e.ShootT); }
+            else if (e.Flash > 0) want = "Hit";
+            else if (e.StepProg >= 0 || e.Entry > 0) want = "Move";
+            Models.Clip cur;
+            bool busy = v.Clip != null && v.Clips.TryGetValue(v.Clip, out cur) && !cur.Loop && now - v.ClipAt < cur.Length;
+            int pri = want == "Attack" ? 2 : want == "Hit" ? 1 : 0, curPri = v.Clip == "Attack" ? 2 : v.Clip == "Hit" ? 1 : 0;
+            if (want != v.Clip && (!busy || pri > curPri))
+            {
+                v.Clip = want;
+                v.ClipAt = want == "Idle" || want == "Move" ? -e.Id * 0.37f : at;
+            }
+            Models.Clip c;
+            if (!v.Clips.TryGetValue(v.Clip, out c) && !v.Clips.TryGetValue("Idle", out c)) return v.Mf.sharedMesh;
+            return c.At(now - v.ClipAt);
         }
 
         /// <summary>

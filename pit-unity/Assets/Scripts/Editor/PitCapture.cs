@@ -1,7 +1,8 @@
 // Command line (needs graphics, so no -nographics):
 //   Unity -batchmode -quit -projectPath . -executeMethod Pit.EditorTools.PitCapture.Run -pitShot out.png [-pitTurn 12] [-pitHero tinker]
 //     [-pitScreen hud|title|heroes|levelup|crucible|pause|end|revive|ad|crucible4|clips] [-pitW 1080 -pitH 1920] [-pitFinal] [-pitRec 4]
-// -pitScreen clips renders every baked frame of the hero's clips (Models.Clip) as a sheet, one clip per row.
+// -pitScreen clips renders every baked frame of the hero's clips (Models.Clip) as a sheet, one clip per row; with
+// -pitHero enemy_<key> it renders that foe model's clips instead.
 // -pitRec s plays on for s more seconds after the shot and writes a 10 fps frame sequence next to it (out_000.png ...).
 // -pitFinal keeps the hero alive and stops once the final boss has been on the board for -pitAfter seconds (default 0),
 // i.e. with the gate docked.
@@ -45,7 +46,9 @@ namespace Pit.EditorTools
         {
             const int T = 256;
             string mk;
-            var a = Board3D.HeroModels.TryGetValue(heroId, out mk) ? Models.Model(mk, true, false, Resources.Load<Shader>("PitUnit")) : null;
+            bool foe = heroId.StartsWith("enemy_");
+            var sh = Resources.Load<Shader>("PitUnit");
+            var a = foe ? Models.Model(heroId, false, true, sh) : Board3D.HeroModels.TryGetValue(heroId, out mk) ? Models.Model(mk, true, false, sh) : null;
             if (a == null || a.Clips == null) throw new Exception("no baked clips for " + heroId);
             Shader.SetGlobalColor("_PitSky", new Color32(54, 58, 66, 255));
             Shader.SetGlobalColor("_PitEquator", new Color32(29, 32, 34, 255));
@@ -63,7 +66,7 @@ namespace Pit.EditorTools
             var fwd = new Vector3(0, Mathf.Sin(th), Mathf.Cos(th));
             cam.transform.localPosition = new Vector3(0, 0, -a.Half.z * 0.5f) - fwd * 3.2f;
             cam.transform.localRotation = Quaternion.LookRotation(fwd, new Vector3(0, Mathf.Cos(th), -Mathf.Sin(th)));
-            string[] order = { "Idle", "Walk", "Shoot", "Hit", "Death", "Victory" };
+            string[] order = foe ? new[] { "Idle", "Move", "Attack", "Hit", "Death" } : new[] { "Idle", "Walk", "Shoot", "Hit", "Death", "Victory" };
             int cols = 0; foreach (var c in a.Clips.Values) cols = Mathf.Max(cols, c.Frames.Length);
             var sheet = new Texture2D(cols * T, order.Length * T, TextureFormat.RGB24, false);
             var px = new Color32[cols * T * order.Length * T];

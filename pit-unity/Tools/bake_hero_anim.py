@@ -1,16 +1,19 @@
-# Rigged hero GLB (pit-art tools/rig_hero.py) -> rest mesh + stepped vertex animation for Models.Model.
+# Rigged GLB (pit-art tools/rig_hero.py, monster_lib.py export_rigged) -> rest mesh + stepped vertex animation for
+# Models.Model.
 # Writes <name>.bytes (the v2 layout of glb_to_bytes.py, rest pose, one submesh) and <name>_anim.bytes:
 #   int32 nv, int32 nclip, float32 fps, float32 min xyz, float32 max xyz, then per clip:
 #   uint8 name length, name (ascii), uint8 loop, int32 frames, frames * nv * (int16 x y z quantised to min..max,
 #   int8 nx ny nz), padded to a multiple of 4 bytes per frame.
 # Vertex order matches <name>.bytes. Clips are sampled at FPS (style.md §6 stepped playback, no blending): a looping
 # clip of length L gets round(L * FPS) frames (the end frame equals the start); a one-shot clip gets one more and holds it.
-# Run: blender -b -P Tools/bake_hero_anim.py -- <rigged glb> <out dir>
+# Enemies (clips Idle/Move/Attack/Hit/Death, keyed every 2 frames at 24 fps, constant): pass fps 12. Their loops end
+# one key before the start pose, so a loop gets one frame per key. Textures are saved under their own names when they
+# are a shared atlas (<atlas>_albedo / <atlas>_emissive), else as <name>_albedo.
+# Run: blender -b -P Tools/bake_hero_anim.py -- <rigged glb> <out dir> [fps]
 import bpy, sys, os, struct, math
 a = sys.argv[sys.argv.index("--")+1:]; src, dst = a[0], a[1]
-FPS = 10
-LOOP = {"Idle": True, "Walk": True, "Shoot": False, "Hit": False, "Death": False, "Victory": True}
-ORDER = ["Idle", "Walk", "Shoot", "Hit", "Death", "Victory"]
+FPS = float(a[2]) if len(a) > 2 else 10
+LOOP = {"Idle": True, "Walk": True, "Move": True, "Shoot": False, "Attack": False, "Hit": False, "Death": False, "Victory": True}
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=src)
@@ -20,6 +23,8 @@ o = [o for o in scn.objects if o.type == 'MESH' and o.parent == arm][0]
 ad = arm.animation_data
 for t in ad.nla_tracks: t.mute = True
 name = os.path.splitext(os.path.basename(src))[0]
+ORDER = [c for c in ["Idle", "Walk", "Move", "Shoot", "Attack", "Hit", "Death", "Victory"] if c in bpy.data.actions]
+KEYED = "Move" in ORDER   # monster_lib clips
 
 def sample():
     dg = bpy.context.evaluated_depsgraph_get()
@@ -61,7 +66,7 @@ for cn in ORDER:
     ad.action = act
     f0, f1 = act.frame_range
     L = (f1 - f0) / scn.render.fps
-    n = max(1, round(L * FPS)) + (0 if LOOP[cn] else 1)
+    n = max(1, round(L * FPS)) + (1 if KEYED or not LOOP[cn] else 0)
     frames = []
     for k in range(n):
         f = f0 + min(k / FPS, L) * scn.render.fps
@@ -86,6 +91,7 @@ with open(os.path.join(dst, name + "_anim.bytes"), "wb") as w:
             b += bytes((-len(b)) % 4)
             w.write(b)
 img = [i for i in bpy.data.images if i.packed_file or i.has_data]
-if img:
-    img[0].filepath_raw = os.path.join(dst, name + "_albedo.png"); img[0].file_format = 'PNG'; img[0].save()
+shared = [i for i in img if i.name.endswith("_albedo") or i.name.endswith("_emissive")]
+for i in shared or img[:1]:
+    i.filepath_raw = os.path.join(dst, (i.name if shared else name + "_albedo") + ".png"); i.file_format = 'PNG'; i.save()
 print("baked", name, nv, "verts", len(idx) // 3, "tris", sum(len(c[2]) for c in clips), "frames")
