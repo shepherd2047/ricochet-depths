@@ -6,7 +6,7 @@ blender -b -P tools/rig_hero.py -- --in models/lowpoly/hero_tinker.glb --out mod
 Steps: import → merge UV-seam duplicates (geometry only; UVs live on loops, so nothing is lost) →
 optional "prop" fix (the smaller disconnected island is moved by --prop-move and bound to the right hand) →
 joints estimated from the mesh (legs and arms by side, spine from heights) → armature → bone-heat weights
-(prop 100 % RightHand) → Idle / Walk / Shoot / Hit / Death / Victory actions → <out>.fbx (Unity) + <out>.glb + preview renders.
+(prop 100 % RightHand) → Idle / Walk / Run / Shoot / Hit / Death / Victory actions → <out>.fbx (Unity) + <out>.glb + preview renders.
 
 Conventions as everywhere in pit-art: Z-up, the character faces −Y, origin at the feet. Character's
 right side is −X. Bone names follow Unity's Humanoid auto-mapping (Hips, Spine, Chest, Neck, Head,
@@ -294,11 +294,35 @@ def walk(f):  # 24 frames per cycle (0.8 s at 30 fps). Sign rule: +deg about X s
         "RightLowerLeg": {"rot": [(X, knee(p - math.pi / 2))]},
         "LeftFoot": {"rot": [(X, -10 * c)]},
         "RightFoot": {"rot": [(X, 10 * c)]},
-        "LeftUpperArm": {"rot": [(X, 22 * s)]},
-        "RightUpperArm": {"rot": [(X, -22 * s)]},
-        "LeftLowerArm": {"rot": [(X, -12)]},
-        "RightLowerArm": {"rot": [(X, -12)]},
+        # arms first drop from the A-pose toward the body (about Y), then swing opposite to the legs
+        "LeftUpperArm": {"rot": [(Y, 28), (X, 34 * s)]},
+        "RightUpperArm": {"rot": [(Y, -28), (X, -34 * s)]},
+        "LeftLowerArm": {"rot": [(X, -18 - 10 * max(0.0, -s))]},
+        "RightLowerArm": {"rot": [(X, -18 - 10 * max(0.0, s))]},
         "Head": {"rot": [(Z, 3 * s)]},
+    }
+
+
+def run(f):  # 16 frames per cycle (0.53 s at 30 fps): forward lean, high knees, big bent-elbow arm pump
+    p = 2 * math.pi * f / 16
+    s, c = math.sin(p), math.cos(p)
+    knee = lambda ph: 20 + max(0.0, math.sin(ph)) * 70  # noqa: E731
+    return {
+        "Hips": {"loc": (0, 0, 0.035 * abs(s) - 0.03), "rot": [(Z, 9 * s)]},
+        "Spine": {"rot": [(X, 6), (Z, -6 * s)]},
+        "Chest": {"rot": [(X, 8), (Z, -8 * s)]},
+        "Neck": {"rot": [(X, -6)]},
+        "Head": {"rot": [(X, -4), (Z, 4 * s)]},
+        "LeftUpperLeg": {"rot": [(X, -42 * s - 8)]},
+        "RightUpperLeg": {"rot": [(X, 42 * s - 8)]},
+        "LeftLowerLeg": {"rot": [(X, knee(p + math.pi / 2))]},
+        "RightLowerLeg": {"rot": [(X, knee(p - math.pi / 2))]},
+        "LeftFoot": {"rot": [(X, -18 * c)]},
+        "RightFoot": {"rot": [(X, 18 * c)]},
+        "LeftUpperArm": {"rot": [(Y, 40), (X, 55 * s)]},
+        "RightUpperArm": {"rot": [(Y, -40), (X, -55 * s)]},
+        "LeftLowerArm": {"rot": [(X, -70 - 15 * max(0.0, -s))]},
+        "RightLowerArm": {"rot": [(X, -70 - 15 * max(0.0, s))]},
     }
 
 
@@ -371,6 +395,7 @@ def victory(f):  # 30 frames: two hops with both arms up, launcher raised
 CLIPS = [  # name, fn, frames (keys), loops
     ("Idle", idle, list(range(0, 61, 2)), True),
     ("Walk", walk, list(range(0, 25, 2)), True),
+    ("Run", run, list(range(0, 17, 2)), True),
     ("Shoot", shoot, list(range(0, 19)), False),
     ("Hit", hit, list(range(0, 13)), False),
     ("Death", death, list(range(0, 31)), False),

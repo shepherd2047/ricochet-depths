@@ -85,7 +85,8 @@ Clean room: I read only `ballpit-spec/style.md` and `ballpit-spec/spec.md` (arch
 | Clip | Frames | Loop |
 |---|---|---|
 | Idle | 60 | yes |
-| Walk | 24 | yes |
+| Walk | 24 | yes (arms drop from the A-pose and swing ±34°) |
+| Run | 16 | yes (forward lean, high knees, bent-elbow arm pump ±55°; user: "add a run with arm swing, it's too stiff") |
 | Shoot | 18 | no |
 | Hit | 12 | no |
 | Death | 30 | no (holds lying on the back) |
