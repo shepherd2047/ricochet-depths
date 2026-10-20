@@ -57,6 +57,7 @@ The timeline is 30 fps with one key every 3 frames (0.1 s) and linear interpolat
 | `Victory` | full | 0.9 s | yes | — | one hop per loop (crouch, launch, airborne frames 2–5, land, crouch), launcher pumped skyward in both hands (30° up at the crouch, 75° up at the top of the hop), chest open, head up |
 
 - **Aim direction:** "Left" means the character's own left. In Blender that's +Z yaw, toward +X. The 35° is split Spine 15° / Chest 20°, with the head adding 8°.
+- **The `_L` variants swing the launcher out.** Seen from behind, a 35° left aim puts the shoulder-mounted barrel right behind the cap. So all three L clips (AimIdle_L, AimWalk_L, Shoot_L) add three things on top of the aim: 35° more chest yaw (Neck and Head turn back by the same amount, so the face stays on the aim), a 20° chest lean to the left, and the launcher dropped 10°. The barrel then shows clearly to the left of the cap. The muzzle points further left than the nominal aim, but ball direction is set by the engine anyway. Blends toward F fade the swing out linearly. Override with `L_SWING=yaw,roll,drop`.
 - **Move vectors** are in **body space**: y = the way the body faces (the aim direction), x = the character's right. Unity's 2D blend-tree convention matches that.
 - **Walk length:** the spec says about 0.9 s for AimWalk. It's 0.8 s here because a 9-key cycle can't split into two equal steps. An 8-key cycle gives four keys per step: contact, down, passing, up. All four walks and AimWalk share that 0.8 s and that phase.
 - **Phase:** frame 0 is left-foot contact (left foot at its forward-most point for WalkForward), and AimWalk bobs on frames 0 and 4. Drive every walk and AimWalk from **one walk clock**. Changing direction then never pops the feet, and the bob stays on the step.
@@ -69,7 +70,7 @@ Every upper-layer motion is rigid for "both arms + launcher". There are only thr
 2. Both upper arms rotating about the measured shoulder line, the line through both shoulder joints. It's turned 35° with the bladed torso, so the axis is computed, not world X.
 3. A small shoulder shrug: the clavicles rotate up and the upper arms counter-rotate, so the arm chains translate.
 
-**Measured on the exported GLB:** across every key of AimIdle, AimWalk, Shoot (L/F/R) and Victory, the left hand moves at most **2.1 mm** relative to the right hand and launcher (re-measured after the Shoot rework: 2.3 mm). Blends between L/F/R are rigid too, and so is any lower clip under them, so the left hand stays on the fore-grip. Death is the only clip where the arms move independently: the left hand deliberately lets go.
+**Measured on the exported GLB:** across every key of AimIdle, AimWalk, Shoot (L/F/R) and Victory, the left hand moves at most **2.1 mm** relative to the right hand and launcher (re-measured after the Shoot rework and the L swing: 2.4 mm). Blends between L/F/R are rigid too, and so is any lower clip under them, so the left hand stays on the fore-grip. Death is the only clip where the arms move independently: the left hand deliberately lets go.
 
 ## Engine side
 

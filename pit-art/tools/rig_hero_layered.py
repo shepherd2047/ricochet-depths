@@ -344,6 +344,7 @@ def fk_clip(rig, name, length, loop, fn, bones):
 
 # ----------------------------------------------------------------------------- upper layer
 AIM = {"L": 1.0, "F": 0.0, "R": -1.0}  # +Z yaw turns toward the character's left (+X)
+L_SWING = _env("L_SWING", (35.0, -20.0, 10.0))  # aim L only: extra chest yaw, chest roll, launcher drop (deg)
 AIM_DEG = 35.0                           # Left/Right variant = 35° of yaw, split Spine 15 / Chest 20
 
 
@@ -378,13 +379,19 @@ def upper_pose(aim, chest_pitch=0.0, chest_roll=0.0, spine_pitch=0.0, arm_pitch=
     (arm_pitch, − = muzzle up), and the shoulder girdle shifted back/up (clavicles rotate, upper arms counter-rotate,
     so the arms translate). Hands stay on the grips to a few mm (girdle arcs pull the shoulders in slightly)."""
     yaw = aim * AIM_DEG
+    # aiming left swings the shoulder-mounted launcher in line with the cap seen from behind: on the L side add
+    # extra chest yaw (head counter-turns), lean the chest left and drop the launcher, so the barrel clears the cap
+    l = max(0.0, aim)
+    yaw_x, roll_x, drop_x = l * L_SWING[0], l * L_SWING[1], l * L_SWING[2]
     A = GEOM["A"]
     pose = {
         "Spine": {"rot": [(X, spine_pitch), (Z, 0.43 * yaw)]},
-        "Chest": {"rot": [(X, chest_pitch), (Y, chest_roll), (Z, 0.57 * yaw)]},
-        "Neck": {"rot": [(X, -0.5 * (chest_pitch + spine_pitch)), (Z, 0.12 * yaw)]},
-        "Head": {"rot": [(X, head_pitch - 0.5 * (chest_pitch + spine_pitch)), (Z, head_yaw + 0.1 * yaw)]},
+        "Chest": {"rot": [(X, chest_pitch), (Y, chest_roll + roll_x), (Z, 0.57 * yaw + yaw_x)]},
+        "Neck": {"rot": [(X, -0.5 * (chest_pitch + spine_pitch)), (Y, -0.5 * roll_x), (Z, 0.12 * yaw - 0.5 * yaw_x)]},
+        "Head": {"rot": [(X, head_pitch - 0.5 * (chest_pitch + spine_pitch)), (Y, -0.5 * roll_x),
+                         (Z, head_yaw + 0.1 * yaw - 0.5 * yaw_x)]},
     }
+    arm_pitch += drop_x
     for s in ("Left", "Right"):
         ax, deg = _girdle(s, sh_back, sh_up)
         pose[f"{s}Shoulder"] = {"rot": [(ax, deg)]}
