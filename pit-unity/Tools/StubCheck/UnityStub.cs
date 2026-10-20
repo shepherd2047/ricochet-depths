@@ -107,6 +107,9 @@ namespace UnityEngine
         public static float Cos(float v) { return (float)System.Math.Cos(v); } public static float Sin(float v) { return (float)System.Math.Sin(v); } public static float Abs(float v) { return System.Math.Abs(v); } public static int Abs(int v) { return System.Math.Abs(v); }
         public static float Tan(float v) { return (float)System.Math.Tan(v); } public static float Atan2(float y, float x) { return (float)System.Math.Atan2(y, x); } public static float Pow(float a, float b) { return (float)System.Math.Pow(a, b); }
         public static float Lerp(float a, float b, float t) { return a + (b - a) * Clamp01(t); } public static float Repeat(float t, float l) { return t - (float)System.Math.Floor(t / l) * l; }
+        public static float Sign(float f) { return f >= 0 ? 1 : -1; } public const float Rad2Deg = 57.29578f;
+        public static float DeltaAngle(float a, float b) { float d = Repeat(b - a, 360); return d > 180 ? d - 360 : d; }
+        public static float MoveTowardsAngle(float a, float b, float m) { float d = DeltaAngle(a, b); return -m < d && d < m ? b : a + (d > 0 ? m : -m); }
     }
     public enum FindObjectsSortMode { None, InstanceID }
     public class Object { public string name; public static void Destroy(Object o) { } public static T FindAnyObjectByType<T>() where T : Object { return null; } public static T[] FindObjectsByType<T>(FindObjectsSortMode m) where T : Object { return new T[0]; } public static void DontDestroyOnLoad(Object o) { } }

@@ -400,7 +400,7 @@ namespace Pit.Game
         // ------------------------------------------------------------ delivered models (pit-art/models/lowpoly)
         /// <summary>A delivered low-poly model: mesh in unit space (feet at z = 0, rising along -z), its material and
         /// its half-extents (x, y footprint from the pivot; z height).</summary>
-        public sealed class Asset { public Mesh Mesh; public Material Mat; public Vector3 Half; public Dictionary<string, Clip> Clips; }
+        public sealed class Asset { public Mesh Mesh; public Material Mat; public Vector3 Half; public Dictionary<string, Clip> Clips; public HeroRig.Data Rig; }
         /// <summary>A baked clip: one mesh per stepped frame (no blending between them, style.md §6).</summary>
         public sealed class Clip
         {
@@ -477,6 +477,8 @@ namespace Pit.Game
                 Mesh = m, Mat = mat,
                 Half = new Vector3(Mathf.Max(-mn.x, mx.x), Mathf.Max(-mn.y, mx.y), mx.z - mn.z),
                 Clips = clips,
+                // the layered hero rig (Tools/bake_hero_rig.py), composed and skinned at runtime by HeroRig
+                Rig = faceAway ? HeroRig.Load(name, s, uv, col, tri) : null,
             };
             assets[name] = a;
             if (glow) MaxFoeVerts = Mathf.Max(MaxFoeVerts, nv); else HeroVerts = Mathf.Max(HeroVerts, nv);

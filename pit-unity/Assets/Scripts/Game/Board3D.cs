@@ -93,6 +93,10 @@ namespace Pit.Game
         string heroClip;
         float heroT, heroClipAt, heroHitAt = -9, heroLastTime, heroLastHurt;
         Run heroRun;
+        // the layered rig (HeroRig): body yaw (game degrees, 90 = up the board), one walk clock, the last Shoot kick
+        HeroRig heroRig, previewRig;
+        float bodyAim = 90, walkT, shootAt = -9, deadAt;
+        int heroLaunches, heroTick = -1, previewTick = -1;
 
         // camera basis and lens of the last fitted frame, for ScreenToBoard
         Vector3 camPos, camRight = Vector3.right, camUp = Vector3.up, camFwd = Vector3.forward;
@@ -367,7 +371,9 @@ namespace Pit.Game
                 string mk;
                 var model = HeroModels.TryGetValue(heroId, out mk) ? Models.Model(mk, true, false, unitShader) : null;
                 var hd = Content.Hero(heroId);
-                previewMf.sharedMesh = model != null ? model.Mesh : Models.Hero(heroId, hd.Color);
+                previewRig = model != null && model.Rig != null ? new HeroRig(model.Rig) : null;
+                previewTick = -1;
+                previewMf.sharedMesh = previewRig != null ? previewRig.Mesh : model != null ? model.Mesh : Models.Hero(heroId, hd.Color);
                 previewMr.sharedMaterial = model != null ? model.Mat : unitMat;
                 float k = model != null ? 1 / Mathf.Max(model.Half.z, 0.5f * Mathf.Max(model.Half.x, model.Half.y) * 2) : 0.8f;
                 previewBody.localScale = new Vector3(k, k, k);
@@ -376,7 +382,18 @@ namespace Pit.Game
             // baked clips: the preview breathes in Idle; models face +y, turn to the camera, sway ±25° at the stepped rate
             Models.Clip idle;
             var pm = HeroModels.ContainsKey(heroId) ? Models.Model(HeroModels[heroId], true, false, unitShader) : null;
-            if (pm != null && pm.Clips != null && pm.Clips.TryGetValue("Idle", out idle)) previewMf.sharedMesh = idle.At(t);
+            if (previewRig != null)
+            {
+                int tick = Mathf.FloorToInt(t * AnimFps);
+                if (tick != previewTick)
+                {
+                    previewTick = tick;
+                    previewRig.Set(HeroRig.Part.Lower, "Stand", tick / AnimFps, null, 0, 0);
+                    previewRig.Aim("AimIdle", tick / AnimFps, 0);
+                    previewRig.Skin();
+                }
+            }
+            else if (pm != null && pm.Clips != null && pm.Clips.TryGetValue("Idle", out idle)) previewMf.sharedMesh = idle.At(t);
             previewBody.localRotation = Quaternion.Euler(0, 0, 180 + 25 * Mathf.Sin(Step(t) * 0.9f));
             previewFrame = Time.frameCount;
             if (!previewCam.enabled) previewCam.enabled = true;
@@ -910,7 +927,9 @@ namespace Pit.Game
                 string mk;
                 var model = HeroModels.TryGetValue(r.Hero.Id, out mk) ? Models.Model(mk, true, false, unitShader) : null;
                 heroModel = model;
-                hero.Mf.sharedMesh = model != null ? model.Mesh : Models.Hero(r.Hero.Id, r.Hero.Color);
+                heroRig = model != null && model.Rig != null ? new HeroRig(model.Rig) : null;
+                heroTick = -1;
+                hero.Mf.sharedMesh = heroRig != null ? heroRig.Mesh : model != null ? model.Mesh : Models.Hero(r.Hero.Id, r.Hero.Color);
                 hero.Mr.sharedMaterial = model != null ? model.Mat : unitMat;
                 // the hero is drawn 1.8 cells tall at 7x9, scaled by its height only; the hit circle (P.R) stays gameplay-only
                 heroK = model != null ? 1.8f / (r.P.R * 2 * K * 1.15f * model.Half.z) : 1;
@@ -920,17 +939,21 @@ namespace Pit.Game
             float st = Step(r.Time);
             float drive = Mathf.Sqrt(r.InputX * r.InputX + r.InputY * r.InputY);
             bool moving = drive > 0;
-            bool animated = heroModel != null && heroModel.Clips != null && HeroAnimate(r, drive);
+            bool animated = heroRig != null ? HeroLayered(r, drive) : heroModel != null && heroModel.Clips != null && HeroAnimate(r, drive);
             // the procedural stand-in (no baked clips) bobs and leans instead
             float bob = animated ? 0 : moving ? 0.06f * Mathf.Abs(Mathf.Sin(st * 9)) : (Mathf.Repeat(st, 1) >= 0.5f ? 0.03f : 0);
             float size = p.R * 2 * K * 1.15f;
-            hero.Go.transform.localPosition = P(p.X, p.Y + HeroBackCells * Run.CELL * HeroGrow, -bob);
+            // §6.1 Hit: a short knockback away from the aim while the hurt flash shows (the hit circle doesn't move)
+            float kb = heroRig != null && p.HurtT > 0 ? 0.25f * Run.CELL * p.HurtT / 0.3f : 0;
+            float ka = bodyAim * Mathf.Deg2Rad;
+            hero.Go.transform.localPosition = P(p.X - Mathf.Cos(ka) * kb, p.Y + Mathf.Sin(ka) * kb + HeroBackCells * Run.CELL * HeroGrow, -bob);
             hero.Go.transform.localScale = new Vector3(size, size, size);
             float hk = heroK * (heroModel != null ? HeroGrow : 1);
             hero.Body.transform.localScale = new Vector3(hk, hk, hk);
             // faces its aim; leans a little into the move
             float lean = moving && !animated ? 12 : 0;
-            hero.Go.transform.localRotation = Quaternion.Euler(-r.InputY * lean, r.InputX * lean, Mathf.Round((p.Aim - 90) / 7.5f) * 7.5f);
+            float face = heroRig != null ? bodyAim : p.Aim;   // the rig's body lags the aim; its upper body covers the rest
+            hero.Go.transform.localRotation = Quaternion.Euler(-r.InputY * lean, r.InputX * lean, Mathf.Round((face - 90) / 7.5f) * 7.5f);
             hero.Mpb.SetFloat("_Flash", p.HurtT > 0 ? 0.6f : 0);
             hero.Mpb.SetFloat("_Ice", p.RootT > 0 ? 1 : 0);
             hero.Mpb.SetFloat("_Bleed", 0);
@@ -947,6 +970,64 @@ namespace Pit.Game
         /// </summary>
         /// <summary>The hero's drawn bounds in world units (1 unit = 1 cell), for the size check in PitCapture.</summary>
         public Bounds HeroBounds { get { return hero != null ? hero.Mr.bounds : new Bounds(); } }
+
+        /// <summary>
+        /// The layered rig (pit-art ANIM.md "Engine side"). The body yaw follows the aim within ±35° and re-centres at
+        /// 180°/s; the upper body covers the rest (aim −1 = the character's left, +1 its right). The move is taken into body
+        /// space and blends the two neighbouring walks on one walk clock (1.25x); standing plays Stand. The upper body
+        /// plays AimIdle, AimWalk on the walk clock, or Shoot from frame 0 on each launch (not again within 0.1 s, so a
+        /// rapid burst still shows its kick). Death and Victory take the whole body. The pose is re-skinned on the 10 fps
+        /// steps only.
+        /// </summary>
+        bool HeroLayered(Run r, float drive)
+        {
+            if (r != heroRun)
+            {
+                heroRun = r; heroT = 0; heroLastTime = r.Time; heroClip = null; heroTick = -1;
+                bodyAim = r.P.Aim; walkT = 0; shootAt = -9; heroLaunches = r.Launches;
+            }
+            float dt = r.IsOver ? Time.unscaledDeltaTime : Mathf.Max(0, r.Time - heroLastTime);
+            heroT += dt;
+            heroLastTime = r.Time;
+            var p = r.P;
+            string full = r.Mode == Mode.Dying || r.Mode == Mode.GameOver ? "Death" :
+                r.Mode == Mode.Victory || r.Mode == Mode.Clearing && r.Won ? "Victory" : null;
+            if (full != heroClip) { heroClip = full; deadAt = heroT; }
+            if (r.Launches != heroLaunches) { heroLaunches = r.Launches; if (heroT - shootAt >= 0.1f) shootAt = heroT; }
+            // body yaw: keep the aim within the upper body's ±35°, then drift toward it
+            float off = Mathf.DeltaAngle(bodyAim, p.Aim);
+            if (Mathf.Abs(off) > 35) bodyAim = p.Aim - Mathf.Sign(off) * 35;
+            bodyAim = Mathf.MoveTowardsAngle(bodyAim, p.Aim, 180 * dt);
+            if (drive > 0) walkT += dt * 1.25f;
+            int tick = Mathf.FloorToInt(heroT * AnimFps);
+            if (tick == heroTick) return true;
+            heroTick = tick;
+            float t = tick / AnimFps, wt = Mathf.Floor(walkT * AnimFps) / AnimFps;
+            if (full != null) heroRig.Set(HeroRig.Part.All, full, t - Mathf.Floor(deadAt * AnimFps) / AnimFps, null, 0, 0);
+            else
+            {
+                // aim > body (counter-clockwise on the board) is the character's left
+                float aim = -Mathf.DeltaAngle(bodyAim, p.Aim) / 35;
+                if (drive > 0)
+                {
+                    // board y points down; the body faces f = (cos b, -sin b), its right is (sin b, cos b)
+                    float b = bodyAim * Mathf.Deg2Rad, fx = Mathf.Cos(b), fy = -Mathf.Sin(b);
+                    float mf = r.InputX * fx + r.InputY * fy, mr = r.InputX * -fy + r.InputY * fx;
+                    // 0° forward, 90° right, 180° back, 270° left; diagonals blend the two neighbours
+                    float ang = Mathf.Repeat(Mathf.Atan2(mr, mf) * Mathf.Rad2Deg, 360) / 90;
+                    int i = Mathf.FloorToInt(ang) % 4;
+                    heroRig.Set(HeroRig.Part.Lower, Walks[i], wt, Walks[(i + 1) % 4], wt, ang - Mathf.Floor(ang));
+                }
+                else heroRig.Set(HeroRig.Part.Lower, "Stand", t, null, 0, 0);
+                float st = Mathf.Floor(shootAt * AnimFps) / AnimFps;
+                if (t - st < 0.2f) heroRig.Aim("Shoot", t - st, aim);
+                else if (drive > 0) heroRig.Aim("AimWalk", wt, aim);
+                else heroRig.Aim("AimIdle", t, aim);
+            }
+            heroRig.Skin();
+            return true;
+        }
+        static readonly string[] Walks = { "WalkForward", "StrafeRight", "WalkBack", "StrafeLeft" };
 
         bool HeroAnimate(Run r, float drive)
         {

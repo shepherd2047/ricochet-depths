@@ -51,7 +51,7 @@ namespace Pit.EditorTools
             bool foe = heroId.StartsWith("enemy_");
             var sh = Resources.Load<Shader>("PitUnit");
             var a = foe ? Models.Model(heroId, false, true, sh) : Board3D.HeroModels.TryGetValue(heroId, out mk) ? Models.Model(mk, true, false, sh) : null;
-            if (a == null || a.Clips == null) throw new Exception("no baked clips for " + heroId);
+            if (a == null || a.Clips == null && a.Rig == null) throw new Exception("no baked clips for " + heroId);
             Shader.SetGlobalColor("_PitSky", new Color32(54, 58, 66, 255));
             Shader.SetGlobalColor("_PitEquator", new Color32(29, 32, 34, 255));
             Shader.SetGlobalColor("_PitGround", new Color32(12, 11, 9, 255));
@@ -68,6 +68,7 @@ namespace Pit.EditorTools
             var fwd = new Vector3(0, Mathf.Sin(th), Mathf.Cos(th));
             cam.transform.localPosition = new Vector3(0, 0, -a.Half.z * 0.5f) - fwd * 3.2f;
             cam.transform.localRotation = Quaternion.LookRotation(fwd, new Vector3(0, Mathf.Cos(th), -Mathf.Sin(th)));
+            if (a.Rig != null) { RigSheet(path, a, mf, cam); return; }
             string[] order = foe ? new[] { "Idle", "Move", "Attack", "Hit", "Death" } : new[] { "Idle", "Walk", "Run", "Shoot", "Hit", "Death", "Victory" };
             int cols = 0; foreach (var c in a.Clips.Values) cols = Mathf.Max(cols, c.Frames.Length);
             var sheet = new Texture2D(cols * T, order.Length * T, TextureFormat.RGB24, false);
@@ -90,6 +91,55 @@ namespace Pit.EditorTools
                     sheet.SetPixels(f * T, (order.Length - 1 - row) * T, T, T, tile.GetPixels());
                 }
                 Debug.Log("PitCapture: clip " + order[row] + " " + c.Frames.Length + " frames, loop " + c.Loop);
+            }
+            RenderTexture.active = null;
+            cam.targetTexture = null;
+            sheet.Apply();
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path)));
+            System.IO.File.WriteAllBytes(path, sheet.EncodeToPNG());
+            Debug.Log("PitCapture: " + path);
+        }
+
+        /// <summary>
+        /// The layered rig's sheet: one row per layer combination (upper clip, aim, lower clip, or one full-body clip),
+        /// 10 fps frames across, then a row sweeping the aim −1 .. +1 over AimIdle × Stand.
+        /// </summary>
+        static void RigSheet(string path, Models.Asset a, MeshFilter mf, Camera cam)
+        {
+            const int T = 256;
+            var rows = new[]
+            {
+                new[] { "AimIdle", "0", "Stand" }, new[] { "AimWalk", "0", "WalkForward" }, new[] { "AimWalk", "0", "WalkBack" },
+                new[] { "AimWalk", "1", "StrafeLeft" }, new[] { "AimWalk", "-1", "StrafeRight" }, new[] { "Shoot", "0", "WalkBack" },
+                new[] { "Death", "", "" }, new[] { "Victory", "", "" }, new[] { "sweep", "", "" },
+            };
+            var rig = new HeroRig(a.Rig);
+            mf.sharedMesh = rig.Mesh;
+            float fps = a.Rig.Fps;
+            int cols = 9;
+            var sheet = new Texture2D(cols * T, rows.Length * T, TextureFormat.RGB24, false);
+            var px = new Color32[cols * T * rows.Length * T];
+            for (int i = 0; i < px.Length; i++) px[i] = new Color32(38, 41, 55, 255);
+            sheet.SetPixels32(px);
+            var rt = new RenderTexture(T, T, 24, RenderTextureFormat.ARGB32);
+            cam.targetTexture = rt;
+            var tile = new Texture2D(T, T, TextureFormat.RGB24, false);
+            for (int row = 0; row < rows.Length; row++)
+            {
+                var rw = rows[row];
+                for (int f = 0; f < cols; f++)
+                {
+                    float t = f / fps;
+                    if (rw[0] == "sweep") { rig.Set(HeroRig.Part.Lower, "Stand", 0, null, 0, 0); rig.Aim("AimIdle", 0, -1 + 2f * f / (cols - 1)); }
+                    else if (rw[2] == "") rig.Set(HeroRig.Part.All, rw[0], t, null, 0, 0);
+                    else { rig.Set(HeroRig.Part.Lower, rw[2], t, null, 0, 0); rig.Aim(rw[0], t, float.Parse(rw[1])); }
+                    rig.Skin();
+                    cam.Render();
+                    RenderTexture.active = rt;
+                    tile.ReadPixels(new Rect(0, 0, T, T), 0, 0);
+                    sheet.SetPixels(f * T, (rows.Length - 1 - row) * T, T, T, tile.GetPixels());
+                }
+                Debug.Log("PitCapture: rig row " + string.Join(" ", rw));
             }
             RenderTexture.active = null;
             cam.targetTexture = null;

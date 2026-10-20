@@ -133,6 +133,20 @@ static class Smoke
             if (ma == null) { errors++; Console.WriteLine($"MODEL hero {hd.Id}: no model"); continue; }
             modelHero = Math.Max(modelHero, ma.Mesh.VertexCount);
             if (ma.Mesh.VertexCount > 1000) { errors++; Console.WriteLine($"BUDGET model {mk}: {ma.Mesh.VertexCount} > 1000"); }
+            if (ma.Rig != null)
+            {
+                // the layered rig: every layer clip present, and a composed pose skins without blowing up
+                foreach (var c in new[] { "AimIdle_L", "AimIdle_F", "AimIdle_R", "AimWalk_L", "AimWalk_F", "AimWalk_R", "Shoot_L", "Shoot_F", "Shoot_R",
+                    "Stand", "WalkForward", "WalkBack", "StrafeLeft", "StrafeRight", "Death", "Victory" })
+                    if (!ma.Rig.Has(c)) { errors++; Console.WriteLine($"RIG {mk}: no clip {c}"); }
+                var rig = new HeroRig(ma.Rig);
+                rig.Set(HeroRig.Part.Lower, "WalkBack", 0.3f, "StrafeLeft", 0.3f, 0.5f);
+                rig.Aim("Shoot", 0, 0.6f);
+                rig.Skin();
+                foreach (var v in rig.Mesh.V)
+                    if (float.IsNaN(v.x) || Math.Abs(v.x) > 5 || Math.Abs(v.y) > 5 || Math.Abs(v.z) > 5) { errors++; Console.WriteLine($"RIG {mk}: vertex {v}"); break; }
+                Console.WriteLine($"rig {mk}: {ma.Rig.Bones} bones, {ma.Rig.Clips.Count} clips");
+            }
         }
         Console.WriteLine($"delivered models: foe max {modelFoe} verts, hero max {modelHero} verts");
         // the procedural fallbacks (bosses, pods, and any unit whose model is missing)

@@ -109,8 +109,12 @@ namespace Pit.Core
             if (v.Q.Count == 0 && Tw == Twist.Scatter && v.T <= 0) { Volley = null; P.VolleySlow = 0.5f; }
         }
 
+        /// <summary>Balls the hero has fired this run (side balls excluded); the view plays a Shoot kick on each.</summary>
+        public int Launches;
+
         FieldBall Launch(OwnedBall inst, float angle, bool temp)
         {
+            if (!temp) Launches++;
             if (Tw == Twist.Scatter) angle += R.Range(-0.2f, 0.2f) / M.Deg;
             Sound(Sfx.Launch);
             float a = angle * M.Deg, v = V0;
