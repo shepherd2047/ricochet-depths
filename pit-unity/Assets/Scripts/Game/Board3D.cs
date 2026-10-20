@@ -98,6 +98,12 @@ namespace Pit.Game
 
         /// <summary>Camera distance from its aim point on the board, last frame (world units).</summary>
         public float Distance { get; private set; }
+        // the hero keeps its 7x9 on-screen size as the camera pulls back: its scale grows by Distance / the 7x9 distance
+        float baseDist;
+        public float HeroGrow { get; private set; } = 1;
+        /// <summary>How far (cells, at 7x9) the hero model stands back toward the camera, off the launch point.</summary>
+        public const float HeroBackCells = 0.35f;
+        float heroK = 1;
 
         public Board3D(Transform parent, Camera uiCam)
         {
@@ -255,6 +261,9 @@ namespace Pit.Game
             if (r != lastRun) { Clear(); lastRun = r; }
 
             FitCamera(r, wv, g);
+            HeroGrow = baseDist > 0 ? Mathf.Max(1, Distance / baseDist) : 1;
+            wv.HeroScale = HeroGrow;
+            wv.HeroBack = HeroBackCells * Run.CELL * HeroGrow;
             float shake = r.Shake > 0 ? r.Shake * 0.12f : 0;
             var jit = shake > 0 ? camRight * ((Random.value - 0.5f) * shake) + camUp * ((Random.value - 0.5f) * shake) : Vector3.zero;
             Cam.transform.localPosition = camPos + jit;
@@ -267,6 +276,25 @@ namespace Pit.Game
             Scenery(r);
             Units(r);
             Hero(r);
+            AimOverlay(r, wv, g);
+        }
+
+        /// <summary>
+        /// The aim line and launch point drawn over the 3D view (HUD layer, projected from the board), so the taller
+        /// hero never hides them.
+        /// </summary>
+        void AimOverlay(Run r, WorldView wv, Gfx g)
+        {
+            if (r.Mode == Mode.GameOver || r.IsOver) return;
+            var p = r.P;
+            float a = p.Aim * Mathf.Deg2Rad;
+            var s0 = BoardToScreen(p.X, p.Y - p.R);
+            var s1 = BoardToScreen(p.X + Mathf.Cos(a) * 2.2f, p.Y - p.R - Mathf.Sin(a) * 2.2f);
+            var keep = g.Cur;
+            g.Cur = Layer.Hud;
+            g.Dashed(s0.x, s0.y, s1.x, s1.y, 1.5f, 3, 5, new Color32(255, 255, 255, 120));
+            g.Ring(s0.x, s0.y, 2.5f, 1, new Color32(255, 255, 255, 150));
+            g.Cur = keep;
         }
 
         // ------------------------------------------------------------ hero preview (hero pick, UI-SPEC §8.2)
@@ -404,9 +432,17 @@ namespace Pit.Game
             viewW = g.W; viewH = g.H;
             tanV = Mathf.Tan(Fov * 0.5f * Mathf.Deg2Rad);
             tanH = tanV * g.W / g.H;
-            float w = r.Bw * K, h = r.Bh * K;
+            float aimY;
+            Distance = Fit(r.Bw * K, r.Bh * K, wv, g, out aimY);
+            baseDist = Fit(7 * Run.CELL * K, 9 * Run.CELL * K, wv, g, out _);
+            camPos = new Vector3(r.Bw * K / 2, aimY, 0) - camFwd * Distance;
+        }
+
+        /// <summary>The fitted camera distance for a w x h board (world units), and the look-at row.</summary>
+        float Fit(float w, float h, WorldView wv, Gfx g, out float aimY)
+        {
             float bandTop = 1 - 2 * wv.Top / g.H, bandBot = 1 - 2 * wv.Bottom / g.H, band = bandTop - bandBot;
-            float aimY = -h / 2, d = 11;
+            aimY = -h / 2; float d = 11;
             for (int it = 0; it < 6; it++)
             {
                 float lo = 2, hi = 80;
@@ -421,8 +457,7 @@ namespace Pit.Game
                 float err = (far + near) / 2 - (bandTop + bandBot) / 2;
                 aimY += err * (h + 2 * Margin) / Mathf.Max(0.05f, far - near);
             }
-            Distance = d;
-            camPos = new Vector3(w / 2, aimY, 0) - camFwd * d;
+            return d;
         }
 
         bool Fits(Vector3 pos, float w, float h, float band)
@@ -866,10 +901,8 @@ namespace Pit.Game
                 heroModel = model;
                 hero.Mf.sharedMesh = model != null ? model.Mesh : Models.Hero(r.Hero.Id, r.Hero.Color);
                 hero.Mr.sharedMaterial = model != null ? model.Mat : unitMat;
-                // art-bible §4: a model is drawn 1.35 cells tall, scaled by its height only (the A-pose arms then span about
-                // 1.1 cells); the hit circle (P.R) stays gameplay-only
-                float k = model != null ? 1.35f / (r.P.R * 2 * K * 1.15f * model.Half.z) : 1;
-                hero.Body.transform.localScale = new Vector3(k, k, k);
+                // the hero is drawn 1.8 cells tall at 7x9, scaled by its height only; the hit circle (P.R) stays gameplay-only
+                heroK = model != null ? 1.8f / (r.P.R * 2 * K * 1.15f * model.Half.z) : 1;
                 heroMesh = r.Hero.Id;
             }
             var p = r.P;
@@ -880,8 +913,10 @@ namespace Pit.Game
             // the procedural stand-in (no baked clips) bobs and leans instead
             float bob = animated ? 0 : moving ? 0.06f * Mathf.Abs(Mathf.Sin(st * 9)) : (Mathf.Repeat(st, 1) >= 0.5f ? 0.03f : 0);
             float size = p.R * 2 * K * 1.15f;
-            hero.Go.transform.localPosition = P(p.X, p.Y, -bob);
+            hero.Go.transform.localPosition = P(p.X, p.Y + HeroBackCells * Run.CELL * HeroGrow, -bob);
             hero.Go.transform.localScale = new Vector3(size, size, size);
+            float hk = heroK * (heroModel != null ? HeroGrow : 1);
+            hero.Body.transform.localScale = new Vector3(hk, hk, hk);
             // faces its aim; leans a little into the move
             float lean = moving && !animated ? 12 : 0;
             hero.Go.transform.localRotation = Quaternion.Euler(-r.InputY * lean, r.InputX * lean, Mathf.Round((p.Aim - 90) / 7.5f) * 7.5f);

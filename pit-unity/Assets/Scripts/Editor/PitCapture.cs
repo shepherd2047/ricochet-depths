@@ -183,7 +183,7 @@ namespace Pit.EditorTools
                 board.RenderPreview();
                 var hb = board.HeroBounds;
                 Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                    "PitCapture: board {0}x{1}, hero drawn {2:F2} cells wide, {3:F2} deep, {4:F2} tall", r.Cols, r.Rows, hb.size.x, hb.size.y, hb.size.z));
+                    "PitCapture: board {0}x{1}, hero drawn {2:F2} cells wide, {3:F2} deep, {4:F2} tall, camera {5:F1}, hero scale x{6:F2}", r.Cols, r.Rows, hb.size.x, hb.size.y, hb.size.z, board.Distance, board.HeroGrow));
 
                 System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path)));
                 Shot(board.Cam, W, H, path);

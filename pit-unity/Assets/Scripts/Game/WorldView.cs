@@ -13,11 +13,12 @@ namespace Pit.Game
     {
         readonly Gfx g;
         public float Ox, Oy, S = 40, Top, Bottom;    // board origin and pixels per board unit
+        public float HeroScale = 1, HeroBack;           // set by Board3D: the hero's camera-distance scale, model offset (board units)
         public bool NumbersOnHud = true;
         public bool Units3D;
 
         // heights above the board plane, in world units (negative is up; a foe is about 0.7 tall)
-        const float ZDecal = -0.01f, ZDrop = -0.15f, ZBeam = -0.3f, ZFx = -0.45f, ZShot = -0.4f, ZBall = -0.4f, ZMark = -1.3f, ZText = -1.4f;
+        const float ZDecal = -0.01f, ZHeroMark = -0.07f, ZDrop = -0.15f, ZBeam = -0.3f, ZFx = -0.45f, ZShot = -0.4f, ZBall = -0.4f, ZMark = -1.3f, ZText = -1.4f;
         readonly System.Collections.Generic.Dictionary<string, int> spriteCells = new System.Collections.Generic.Dictionary<string, int>();
 
         int Cell(string key)
@@ -85,7 +86,9 @@ namespace Pit.Game
             foreach (var h in r.Hazards) DrawHazard(r, h);
             foreach (var e in r.Enemies) if (!e.Dead) DrawFloorMarks(r, e);
             DrawTarget(r);
+            g.Z = ZHeroMark;   // above the kit's raised floor slabs, which hide ZDecal shapes away from the grout
             if (r.Mode != Mode.GameOver) DrawPlayerMarks(r);
+            g.Z = ZDecal;
 
             g.Cur = Layer.Glow;
             g.Z = ZDrop;
@@ -213,14 +216,23 @@ namespace Pit.Game
             }
         }
 
+        /// <summary>The ground ring's colour: Tinker's cobalt cloak, else the hero's own colour.</summary>
+        static uint RingColor(string id, uint fallback) { return id == "tinker" ? 0x2f63ffu : fallback; }
+
         void DrawPlayerMarks(Run r)
         {
             var p = r.P;
             float px = Sx(p.X), py = Sy(p.Y), pr = p.R * S;
-            float a = p.Aim * Mathf.Deg2Rad;
-            g.Dashed(px, py, px + Mathf.Cos(a) * S * 2.2f, py - Mathf.Sin(a) * S * 2.2f, 2, 3, 6, new Color32(255, 255, 255, 90));
+            // the aim line is drawn by Board3D over the 3D view; here the catch strip, the drop shadow under the model and
+            // the ground ring (1.3 cells across in the hero's signature colour) on the hero's true position
             g.Rect(px - 0.5f * r.CatchW * S, py - 0.5f * S, r.CatchW * S, S, new Color32(107, 227, 255, 22));
-            g.Ellipse(px, py, pr * 1.05f, pr * 0.9f, new Color32(0, 0, 0, 90));
+            float cs = Run.CELL * S * HeroScale, sy = py + HeroBack * S;
+            g.Ellipse(px, sy, 0.42f * cs, 0.34f * cs, new Color32(0, 0, 0, 70));
+            g.Ellipse(px, sy, 0.3f * cs, 0.24f * cs, new Color32(0, 0, 0, 70));
+            uint rc = RingColor(r.Hero.Id, r.Hero.Color);
+            g.Circle(px, py, 0.65f * cs, Col.Hex(rc, 0.12f));
+            g.Ring(px, py, 0.65f * cs, 0.07f * cs, Col.Hex(rc, 0.75f));
+            g.Ring(px, py, 0.65f * cs + 0.06f * cs, 0.05f * cs, Col.Hex(rc, 0.22f));
             if (r.Tw == Twist.Paddle) g.RoundRect(px - 0.5f * r.CatchW * S, py - pr - 6, r.CatchW * S, 4, 2, Col.Hex(0x7fd8ff, 0.8f));
             if (p.PoisonT > 0) g.Ring(px, py, pr + 3, 1.5f, Col.Hex(0x7ee35a, 0.7f));
             if (p.BurnT > 0) g.Ring(px, py, pr + 5, 1.5f, Col.Hex(0xff9447, 0.7f));
