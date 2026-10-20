@@ -75,6 +75,10 @@ namespace Pit.Core
 
         /// <summary>Movement input, -1..1 per axis, set by the host each frame.</summary>
         public float InputX, InputY;
+        /// <summary>How far down (board y) the hero may walk: the view sets it to the bottom edge of what the camera
+        /// shows above the HUD. NaN (no view, the sims) keeps the old limit, half a cell above the board's near edge.</summary>
+        public float HeroMaxY = float.NaN;
+        float HeroYMax { get { return float.IsNaN(HeroMaxY) ? Bh - 0.5f : M.Max(Bh - 0.5f, HeroMaxY); } }
 
         // ------------------------------------------------------------ derived player numbers (recomputed by Derive)
         public float ItemPower, Aoe, StatusK, Str, BabyMin, BabyMax, V0, Fire, Accel, Cooldown, Crit, Move, Defense, CatchW, Pickup, BurnBoost;

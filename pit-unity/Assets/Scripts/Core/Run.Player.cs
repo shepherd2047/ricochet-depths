@@ -40,7 +40,7 @@ namespace Pit.Core
                 p.X += mx * sp * dt; p.Y += my * sp * dt;
             }
             p.X = M.Clamp(p.X, p.R, Bw - p.R);
-            p.Y = M.Clamp(p.Y, p.R + 0.2f, Bh - 0.5f);
+            p.Y = M.Clamp(p.Y, p.R + 0.2f, HeroYMax);
             foreach (var e in Enemies)
             {
                 if (e.Dead || e.Entry > 0 || e.Flying || e.Under || e.Mount != null) continue;
@@ -58,7 +58,7 @@ namespace Pit.Core
                 }
             }
             p.X = M.Clamp(p.X, p.R, Bw - p.R);
-            p.Y = M.Clamp(p.Y, p.R + 0.2f, Bh - 0.5f);
+            p.Y = M.Clamp(p.Y, p.R + 0.2f, HeroYMax);
         }
 
         void StepShots(float dt)

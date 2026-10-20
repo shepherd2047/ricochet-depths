@@ -105,6 +105,8 @@ namespace Pit.Game
         public float HeroGrow { get; private set; } = 1;
         /// <summary>How far (cells, at 7x9) the hero model stands back toward the camera, off the launch point.</summary>
         public const float HeroBackCells = 0.35f;
+        /// <summary>The hero's ground ring, cells across at 7x9 (WorldView.DrawPlayerMarks).</summary>
+        public const float HeroRingCells = 1.3f;
         float heroK = 1;
 
         public Board3D(Transform parent, Camera uiCam)
@@ -266,6 +268,9 @@ namespace Pit.Game
             HeroGrow = baseDist > 0 ? Mathf.Max(1, Distance / baseDist) : 1;
             wv.HeroScale = HeroGrow;
             wv.HeroBack = HeroBackCells * Run.CELL * HeroGrow;
+            // no dead floor under the board: the hero walks down until its ground ring meets the HUD's top edge
+            var low = ScreenToBoard(viewW / 2, wv.Bottom - 2);
+            if (low.y > -900) r.HeroMaxY = low.y - HeroRingCells / 2 * Run.CELL * HeroGrow;
             float shake = r.Shake > 0 ? r.Shake * 0.12f : 0;
             var jit = shake > 0 ? camRight * ((Random.value - 0.5f) * shake) + camUp * ((Random.value - 0.5f) * shake) : Vector3.zero;
             Cam.transform.localPosition = camPos + jit;

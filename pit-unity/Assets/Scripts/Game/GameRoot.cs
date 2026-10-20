@@ -10,6 +10,8 @@ namespace Pit.Game
         enum Screen_ { Title, Heroes, Game }
 
         const float DesignW = 360, DesignH = 640, Step = 1 / 60f;
+        // the whole game runs 44 % faster (two 20 % steps) than the sim's own clock; the x1 / x1.5 / x2 button multiplies on top
+        const float GameSpeed = 1.44f;
 
         Camera cam;
         Board3D board;
@@ -196,7 +198,8 @@ namespace Pit.Game
             // ---- simulate
             if (screens.BotOn && (r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser)) Bot.AutoPick(r);
             if (screens.BotOn && r.Mode == Mode.Revive) r.GiveUp();   // the bot never watches ads
-            acc += dt * screens.SpeedSetting;
+            acc += dt * screens.SpeedSetting * GameSpeed;
+            Time.timeScale = screens.SpeedSetting * GameSpeed;   // the VFX clock (VfxBank ticks on Time.deltaTime) keeps pace
             int steps = 0;
             while (acc >= Step && steps < 8)
             {

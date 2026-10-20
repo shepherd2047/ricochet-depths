@@ -258,7 +258,7 @@ namespace UnityEngine
         public static bool GetKeyDown(KeyCode k) { return false; } public static bool GetKey(KeyCode k) { return false; }
     }
     public static class Screen { public static int width, height; public static Rect safeArea; }
-    public static class Time { public static float unscaledDeltaTime = 1 / 60f; public static int frameCount; }
+    public static class Time { public static float unscaledDeltaTime = 1 / 60f, timeScale = 1; public static int frameCount; }
     public static class Application { public static int targetFrameRate; public static bool isEditor; }
     public static class QualitySettings { public static int vSyncCount; }
     public static class Random { static readonly System.Random r = new System.Random(1); public static float value { get { return (float)r.NextDouble(); } } }
