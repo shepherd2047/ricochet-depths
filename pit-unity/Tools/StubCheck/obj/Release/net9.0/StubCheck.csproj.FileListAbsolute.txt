@@ -17,3 +17,4 @@
 /private/tmp/claude-501/-Users-m-projects-new/c905d469-3c73-48aa-8b35-caf04d577aab/scratchpad/nourp/StubCheck.runtimeconfig.json
 /private/tmp/claude-501/-Users-m-projects-new/c905d469-3c73-48aa-8b35-caf04d577aab/scratchpad/nourp/StubCheck.dll
 /private/tmp/claude-501/-Users-m-projects-new/c905d469-3c73-48aa-8b35-caf04d577aab/scratchpad/nourp/StubCheck.pdb
+/Users/m/projects/new/pit-unity/Tools/StubCheck/obj/Release/net9.0/StubCheck.sourcelink.json

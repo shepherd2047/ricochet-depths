@@ -36,7 +36,7 @@ Drag to move. Your balls fire on their own. Tap a foe to focus it. Pick upgrades
 - **22 foe types and 3 bosses.** Shooters, mortars, healers, hatchers, burrowers, shields and elites, with telegraphed attacks you can read and dodge.
 - **6 heroes.** Each has their own stat spread, starting ball and rule twist (ricochet, scatter, pierce-to-wall, paddle swat, fan volley).
 - **Layered hero animation.** The upper body aims left, forward or right and kicks on every shot. The legs walk, strafe and back-pedal on their own layer.
-- **Built for TikTok.** Portrait, English UI, an about 7.5 MiB WebGL build, and rewarded-ad hooks (revive, free reroll, +1 upgrade) behind a placeholder ad service.
+- **Built for TikTok.** Portrait, English UI, a WebGL build of about 7.5 MiB, and rewarded-ad hooks (revive, free reroll, +1 upgrade) behind a placeholder ad service.
 
 ## Balls
 

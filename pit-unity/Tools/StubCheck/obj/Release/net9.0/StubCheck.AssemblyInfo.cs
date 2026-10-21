@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("StubCheck")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2eca30b69cecd7cc635c866c86e3edf0655381b7")]
 [assembly: System.Reflection.AssemblyProductAttribute("StubCheck")]
 [assembly: System.Reflection.AssemblyTitleAttribute("StubCheck")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
