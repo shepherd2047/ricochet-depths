@@ -25,7 +25,7 @@ The game builds itself at runtime (`GameRoot.Boot`, `[RuntimeInitializeOnLoadMet
 - **Balls.** 14 base balls and 12 evolutions, with burn, frostfire, poison, bleed, freeze, slow, blind, charm, leech, chain, row and column beams, quake, bomb, nuke, flash, aura, egg and split. Recall, catch and side balls follow the spec.
 - **Foes.** 22 types, covering:
   - stacking riders;
-  - melee wind-up and lunge;
+  - melee wind-up and lunge, started only when a foe touches the bottom edge of the board or the hero touches it;
   - shooters (arrow, icicle root, fireball, venom);
   - mortar and laser telegraphs;
   - healer, hatcher, flyer, burrower, side-stepper;

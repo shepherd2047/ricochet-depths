@@ -7,7 +7,8 @@ namespace Pit.Core
     {
         readonly List<Enemy> moved = new List<Enemy>();
 
-        public float AttackLine { get { return Bh - 0.5f - CELL; } }
+        // foes lunge at the hero (and blow up) when they touch the bottom edge of the board, or when the hero touches them
+        public float AttackLine { get { return Bh - 0.05f; } }
 
         void StepEnemies(float dt)
         {
@@ -202,10 +203,12 @@ namespace Pit.Core
         void StepMelee(Enemy e, float dt, float tl, bool frozen)
         {
             float cx = e.Cx, cy = e.Cy;
-            float dist = M.Sqrt((P.X - cx) * (P.X - cx) + (P.Y - cy) * (P.Y - cy));
             bool atLine = e.Bottom >= AttackLine;
             bool blind = Has(e, "blind");
-            bool inRange = blind ? atLine : (dist <= e.H / 2 + 1.5f || atLine);
+            // the hero's hit circle touching the foe's box (nearest point of the box within P.R)
+            float nx = M.Max(e.X, M.Min(P.X, e.X + e.W)), ny = M.Max(e.Y, M.Min(P.Y, e.Y + e.H));
+            bool touch = (P.X - nx) * (P.X - nx) + (P.Y - ny) * (P.Y - ny) <= P.R * P.R;
+            bool inRange = atLine || (!blind && touch);
             if (e.Atk == null)
             {
                 if (inRange && Time - e.LastAtk >= 1 && Mode == Mode.Playing) e.Atk = new Attack { T = tl * e.Def.Windup };
