@@ -232,6 +232,9 @@ namespace Pit.Core
             if (d <= 0) return;
             Scroll += d;
             FloorShift += d * CELL;
+            // the hero stands on the floor too: it rides it toward the bottom (walking is relative to the floor) and stops at
+            // the lowest spot it may stand on
+            if (Mode == Mode.Playing) P.Y = M.Min(HeroYMax, P.Y + d * CELL);
             // pickups lie on the floor and ride it; ones that slide 2 units past the bottom are gone
             foreach (var o in Drops) if (!o.Flying) o.Y += d * CELL;
             Drops.RemoveAll(o => !o.Flying && o.Y > Bh + 2);
