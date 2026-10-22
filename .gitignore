@@ -48,3 +48,10 @@ pit-vfx/VfxLab/*.slnx
 
 # Blender auto-backups
 *.blend1
+
+# Build and editor junk (local only)
+pit-unity/.vscode/
+pit-unity/Data/
+pit-unity/Tools/*/bin/
+pit-unity/Tools/*/obj/
+pit-unity/Assets/Resources/PerformanceTestRun*
