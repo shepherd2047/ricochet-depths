@@ -129,3 +129,9 @@ Clean room: I read only `ballpit-spec/style.md` and `ballpit-spec/spec.md` (arch
 1. Done: the 7 remaining concepts are generated (13 Figma AI calls in total). Mender's wax is lighter than the enemy value range; decimate.py's `--vrange` pulls it down.
 2. Remaining 5 enemies + Bellwarden: hand-build them with `monster_lib.py` the same way (faster and cleaner than image-to-3D at ≤ 400 verts). TRELLIS for the bold Wren / Osk / Juno when more heroes are wanted.
 3. Analysis side: run the similarity check on `concept/` and `models/lowpoly/`.
+
+## XP gem redesign
+
+- **Concepts:** four designs (A Shard, B Cluster, C Nugget, D Escalating cut), first quiet (`concept/gem_options.png`), then loud (`concept/gem_options_loud.png`): 28 % bigger, 20 % wider, brighter, with an outline and a floor ring. The loud pass followed the user's ask that the gem should loudly announce itself.
+- **The user picked B Cluster:** one crystal for the small tier, two for the medium and three for the large, coloured green, violet and pink.
+- **Final cut:** `models/lowpoly/gem_xp.glb`, 16 / 25 / 34 tris, plus a glowing floor ring per tier. The outline was dropped to stay near 36 tris. Integration details are in `models/lowpoly/GEM_INTEGRATION.md`.
