@@ -135,3 +135,4 @@ Clean room: I read only `ballpit-spec/style.md` and `ballpit-spec/spec.md` (arch
 - **Concepts:** four designs (A Shard, B Cluster, C Nugget, D Escalating cut), first quiet (`concept/gem_options.png`), then loud (`concept/gem_options_loud.png`): 28 % bigger, 20 % wider, brighter, with an outline and a floor ring. The loud pass followed the user's ask that the gem should loudly announce itself.
 - **The user picked B Cluster:** one crystal for the small tier, two for the medium and three for the large, coloured green, violet and pink.
 - **Final cut:** `models/lowpoly/gem_xp.glb`, 16 / 25 / 34 tris, plus a glowing floor ring per tier. The outline was dropped to stay near 36 tris. Integration details are in `models/lowpoly/GEM_INTEGRATION.md`.
+- **Outline added** after the user asked for one: separate `gem_rim_t1/2/3` inverted-hull meshes, 0.045 cells thick and near-white. Checked at phone size with the game's emissive scale (`models/lowpoly/_gem_xp_rim_check.png`).

@@ -29,9 +29,10 @@ TIERS = [
     {"name": "t2", "hex": "#9C5BFF", "h": 0.46},
     {"name": "t3", "hex": "#FF4BAE", "h": 0.60},
 ]
+EMIT_SCALE = 3.0  # PitUnit multiplies uv.x by 3; the game currently scales art emissive by 0.4 (use 1.2 to match)
 LOUD = False  # louder variant: bigger, chunkier, brighter, with an outline rim and a floor ring
 RIM = False   # inverted-hull outline (doubles the tris; the concept sheet used it, the final B2 does not)
-RIM_W = 0.032  # outline shell thickness in cells
+RIM_W = 0.045  # outline shell thickness in cells (~2-3 px at phone size; 0.032 was a hairline, 0.06 looked like a glass shell)
 LIGHT = Vector((-0.35, -0.55, 0.76)).normalized()  # key light direction used to pick the glint facet
 
 
@@ -169,7 +170,7 @@ def paint(me, tier):
     for p in me.polygons:
         nz = p.normal.z
         if is_rim[p.index]:
-            c, e = mix(base, (1, 1, 1), 0.40), 1.0
+            c, e = mix(base, (1, 1, 1), 0.70), 1.0
         elif p.index == glint:
             c, e = mix(base, (1, 1, 1), 0.72), 0.55
         elif nz > 0.35:
@@ -196,7 +197,7 @@ def gem_material():
     ea.attribute_name = "Emit"
     mul = nt.nodes.new("ShaderNodeMath")
     mul.operation = "MULTIPLY"
-    mul.inputs[1].default_value = 3.0
+    mul.inputs[1].default_value = EMIT_SCALE
     nt.links.new(ca.outputs["Color"], bsdf.inputs["Base Color"])
     nt.links.new(ca.outputs["Color"], bsdf.inputs["Emission Color"])
     nt.links.new(ea.outputs["Fac"], mul.inputs[0])
@@ -344,6 +345,20 @@ def concepts(out, options):
             render(os.path.join(out, f"gem_{opt}{'_loud' if LOUD else ''}_{shot}.png"))
 
 
+def split_rim(me):
+    """Split a gem built with RIM into (crystal mesh, rim shell mesh) by the face attribute "rim"."""
+    rim = me.copy()
+    rim.name = me.name.replace("gem_", "gem_rim_")
+    for target, keep_rim in ((me, False), (rim, True)):
+        bm = bmesh.new()
+        bm.from_mesh(target)
+        layer = bm.faces.layers.int.get("rim")
+        bmesh.ops.delete(bm, geom=[f for f in bm.faces if bool(f[layer]) != keep_rim], context="FACES")
+        bm.to_mesh(target)
+        bm.free()
+    return me, rim
+
+
 def export(opt, out_dir):
     """One GLB holding six meshes: gem_t1..t3 (the crystals) and gem_ring_t1..t3 (floor rings).
     Vertex colour = COLOR_0 (per facet), uv.x = emissive strength 0-1 (PitUnit multiplies by 3)."""
@@ -353,7 +368,9 @@ def export(opt, out_dir):
     for t in range(3):
         gem = build(opt, t)
         gem.name = f"gem_{TIERS[t]['name']}"
-        for me in (gem, ring_mesh(gem, t)):
+        ring = ring_mesh(gem, t)
+        parts = list(split_rim(gem)) if RIM else [gem]
+        for me in parts + [ring]:
             me.color_attributes.active_color = me.color_attributes["Col"]
             uv = me.uv_layers.new(name="UVMap")
             for p in me.polygons:
@@ -382,10 +399,11 @@ def main():
     ap.add_argument("--export")
     ap.add_argument("--loud", action="store_true")
     ap.add_argument("--rim", action="store_true")
+    ap.add_argument("--emit-scale", type=float, default=3.0)
     a = ap.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
     os.makedirs(a.out, exist_ok=True)
-    global LOUD, RIM
-    LOUD, RIM = a.loud, a.rim
+    global LOUD, RIM, EMIT_SCALE
+    LOUD, RIM, EMIT_SCALE = a.loud, a.rim, a.emit_scale
     if a.export:
         export(a.export, os.path.join(ART, "models", "lowpoly"))
     else:
