@@ -765,7 +765,7 @@ namespace Pit.Game
         // floor; WorldView draws the other drops. The meshes are in cells already.
         const float GemSpin = 30, GemBob = 0.05f, GemLift = 0.1f, RingSpin = -10, RingZ = 0.03f;   // RingZ: clear of the floor slabs' tops
         const float GemScale = 1.5f;   // the art meshes are in cells; the user wanted them half again as big (2026-10-22)
-        sealed class GemView { public GameObject Go, Ring; public MeshFilter Mf, Rf; public int Tier = -1; }
+        sealed class GemView { public GameObject Go, Ring, Rim; public MeshFilter Mf, Rf, Hf; public int Tier = -1; }
         readonly List<GemView> gems = new List<GemView>();
 
         public static int GemTier(int v) { return v >= 100 ? 2 : v >= 10 ? 1 : 0; }
@@ -780,7 +780,7 @@ namespace Pit.Game
                 if (n == gems.Count) gems.Add(NewGem());
                 var gv = gems[n++];
                 int tier = GemTier(d.V);
-                if (gv.Tier != tier) { gv.Mf.sharedMesh = Models.Gem(tier); gv.Rf.sharedMesh = Models.GemRing(tier); gv.Tier = tier; }
+                if (gv.Tier != tier) { gv.Mf.sharedMesh = Models.Gem(tier); gv.Rf.sharedMesh = Models.GemRing(tier); gv.Hf.sharedMesh = Models.GemRim(tier); gv.Tier = tier; }
                 if (!gv.Go.activeSelf) gv.Go.SetActive(true);
                 // the ring marks where the gem lies; a gem flying to the hero leaves it behind
                 if (gv.Ring.activeSelf == d.Flying) gv.Ring.SetActive(!d.Flying);
@@ -801,7 +801,8 @@ namespace Pit.Game
             var gv = new GemView();
             gv.Go = MakeObject("gem", units, null, out gv.Mf);
             gv.Ring = MakeObject("gem-ring", units, null, out gv.Rf);
-            foreach (var go in new[] { gv.Go, gv.Ring })
+            gv.Rim = MakeObject("gem-rim", gv.Go.transform, null, out gv.Hf);   // a child: spins, bobs and scales with the crystal
+            foreach (var go in new[] { gv.Go, gv.Ring, gv.Rim })
             {
                 var mr = go.GetComponent<MeshRenderer>();
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;

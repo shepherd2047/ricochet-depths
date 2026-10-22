@@ -636,6 +636,8 @@ namespace Pit.Game
         public static Mesh Gem(int tier) { return GemPiece("gem_t" + (tier + 1)); }
         /// <summary>The glowing ring on the floor under a gem of that tier.</summary>
         public static Mesh GemRing(int tier) { return GemPiece("gem_ring_t" + (tier + 1)); }
+        /// <summary>The crystal's outline: an inverted hull 0.045 cells out (reversed winding, normals inward), drawn with the crystal's transform.</summary>
+        public static Mesh GemRim(int tier) { return GemPiece("gem_rim_t" + (tier + 1)); }
 
         /// <summary>
         /// Loads Resources/Models/&lt;name&gt;.bytes from Tools/gem_glb_to_bytes.py (pit-art models/lowpoly/gem_xp.glb, see
