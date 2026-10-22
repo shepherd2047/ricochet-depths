@@ -1,4 +1,4 @@
-// -pitScreen readme -pitKind fight|boss|ray|levelup|close [-pitExposure 0.9] [-pitBoss 0] [-pitFrom 25 -pitTo 40] [-pitLead 30] [-pitLevels 12] [-pitPick 0]
+// -pitScreen readme -pitKind fight|boss|ray|levelup|close [-pitExposure 0.9] [-pitBoss 0] [-pitFrom 25 -pitTo 40] [-pitLead 30] [-pitLevels 12] [-pitFreeze 60] [-pitPick 0]
 // Store / README shots. The bot plays a fixed run (seed 1234) with Ember, Rime, Spark and Ray at level 3 in the four
 // slots, +Lead (more baby balls, so the board is busy) and the hero in god mode. Pass 1 plays the run in the core alone and scores every frame of the shot window
 // (balls in flight, a launch in the last 0.1 s so the muzzle flash shows, burning and frozen foes, recent chains and row
@@ -27,6 +27,9 @@ namespace Pit.EditorTools
             foreach (var id in ReadmeBalls)
                 if (!r.Balls.Exists(b => b.Id == id)) r.DevAddBall(id);
             foreach (var b in r.Balls) if (b.Level < 3) r.DevLevelBall(b, 3);
+            // freezes are rare at 14% a hit; the shots want a few frozen foes on screen
+            float fc = float.Parse(Arg("-pitFreeze", "60"), System.Globalization.CultureInfo.InvariantCulture);
+            foreach (var b in r.Balls) if (b.Id == "frost" && b.Stats.G(K.FreezeChance) < fc) b.Stats = new Stats(b.Stats).With(K.FreezeChance, fc);
         }
 
         /// <summary>The scripted run, identical in both passes. Returns the run after frame index `stop` (or the window's end).</summary>
@@ -83,8 +86,8 @@ namespace Pit.EditorTools
                 bool flash = Frame - LastLaunch <= 5;
                 if (Kind == "ray")
                 {
-                    // the beam 5 frames old: fully drawn, its hits flashing
-                    if (Frame - LastRow != 5 || RowTargets < 2) return -1;
+                    // the beam 16 frames old: fully drawn and still at full strength, its hits flashing
+                    if (Frame - LastRow != 16 || RowTargets < 2) return -1;
                     return RowTargets * 6 + Math.Min(burning, 6) * 3 + Math.Min(frozen, 6) * 3 + Math.Min(field, 20);
                 }
                 if (field < (Kind == "boss" ? 10 : 14)) return -1;
