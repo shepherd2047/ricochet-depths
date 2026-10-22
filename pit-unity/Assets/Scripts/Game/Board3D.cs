@@ -1053,7 +1053,7 @@ namespace Pit.Game
             float x = lp.x - g.Ox, y = -lp.y - g.Oy;
             g.Sprite(softCell, x, y, size, new Color32(255, 170, 70, 255));
             g.Sprite(softCell, x, y, size * 0.55f, new Color32(255, 230, 160, 255));
-            g.Sprite(softCell, x, y, size * 0.25f, Color.white);
+            g.Sprite(softCell, x, y, size * 0.25f, new Color32(255, 255, 255, 255));
             g.Cur = keep; g.Z = kz;
         }
 

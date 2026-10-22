@@ -1,7 +1,8 @@
 // Dev panel: a showcase overlay that drives the run directly (Core/Run.Dev.cs). Opened with the DEV button at the
 // HUD's top right, or F1 / the backquote key. The sim stands still while it is open; changes apply when it closes.
 // Tabs: RUN (levels, HP and god mode, gold, straight to any boss, clear the board, autopilot, game speed),
-// BALLS and ITEMS (add any of them, evolved ones included, level them 1..3, remove them).
+// BALLS and ITEMS (add any of them, evolved ones included, level them 1..3, remove them), SPAWN (any foe type, 1 / 3 / a
+// full row at a time, or a mixed row from the turn's pool).
 // Left out of TikTok builds (PIT_TIKTOK) unless PIT_DEV is defined too.
 using System.Collections.Generic;
 using Pit.Core;
@@ -16,14 +17,16 @@ namespace Pit.Game
 #else
         public const bool Enabled = true;
 #endif
-        enum Tab { Run, Balls, Items }
+        enum Tab { Run, Balls, Items, Spawn }
 
         readonly Gfx g;
         readonly Ui ui;
         Tab tab;
         bool manualPicks;
+        int spawnN = 1;   // 0 = a full row
+        string spawnNote;
         public bool Open;
-        /// <summary>The open tab: 0 RUN, 1 BALLS, 2 ITEMS.</summary>
+        /// <summary>The open tab: 0 RUN, 1 BALLS, 2 ITEMS, 3 SPAWN.</summary>
         public int Page { get { return (int)tab; } set { tab = (Tab)value; } }
 
         static readonly Color32 PanelBg = Col.Hex(0x14111f, 0.96f), Edge = Col.Hex(0xffb347, 0.55f), Head = Col.Hex(0xffb347),
@@ -57,15 +60,16 @@ namespace Pit.Game
             g.Text("DEV PANEL", x, y + 11, 14, Head, Align.Left);
             if (ui.Button("dev_close", px + pw - 12 - 64, y, 64, 24, "CLOSE", accent: true, small: true)) Open = false;
             y += 32;
-            string[] names = { "RUN", "BALLS", "ITEMS" };
-            float tw = (w - 12) / 3;
-            for (int i = 0; i < 3; i++)
+            string[] names = { "RUN", "BALLS", "ITEMS", "SPAWN" };
+            float tw = (w - 18) / 4;
+            for (int i = 0; i < 4; i++)
                 if (ui.Button("dev_tab", x + i * (tw + 6), y, tw, 28, names[i], accent: (int)tab == i, small: true, data: i)) tab = (Tab)i;
             y += 40;
 
             if (tab == Tab.Run) RunTab(r, s, x, y, w);
             else if (tab == Tab.Balls) BallsTab(r, x, y, w);
-            else ItemsTab(r, x, y, w);
+            else if (tab == Tab.Items) ItemsTab(r, x, y, w);
+            else SpawnTab(r, x, y, w);
         }
 
         // ------------------------------------------------------------ RUN
@@ -188,6 +192,35 @@ namespace Pit.Game
             bool full = r.Items.Count >= Run.Slots;
             Grid("dev_ai", ids, id => Content.Items[id].Name, id => Content.Items[id].Color, id => Content.Items[id].Evolved,
                 id => full || r.ItemLv(id) > 0, x, y, w, id => r.DevAddItem(id));
+        }
+
+        // ------------------------------------------------------------ SPAWN
+        void SpawnTab(Run r, float x, float y, float w)
+        {
+            const float bh = 28, gap = 6;
+            int alive = 0;
+            foreach (var e in r.Enemies) if (!e.Dead && !e.Boss && !e.Pod) alive++;
+            Section("HOW MANY PER TAP  ·  " + alive + " foes on the board", x, ref y);
+            int[] counts = { 1, 3, 0 };
+            string[] labels = { "x1", "x3", "ROW" };
+            float b4 = (w - 3 * gap) / 4;
+            for (int i = 0; i < counts.Length; i++)
+                if (ui.Button("dev_sn", x + i * (b4 + gap), y, b4, bh, labels[i], accent: spawnN == counts[i], small: true, data: i)) spawnN = counts[i];
+            if (ui.Button("dev_mix", x + 3 * (b4 + gap), y, b4, bh, "MIX ROW", small: true, disabled: r.IsOver)) Spawn(r, null, r.Cols);
+            y += bh + gap;
+            if (ui.Button("dev_clear2", x, y, w, bh, "CLEAR FOES", small: true, disabled: r.IsOver)) r.DevClear();
+            y += bh + 14;
+            Section("FOES (tap to spawn at the top)" + (spawnNote != null ? "  ·  " + spawnNote : ""), x, ref y);
+            var ids = new List<string>(Content.Enemies.Keys);
+            ids.Sort((a, b) => Content.Enemies[a].From != Content.Enemies[b].From ? Content.Enemies[a].From.CompareTo(Content.Enemies[b].From) : string.CompareOrdinal(a, b));
+            Grid("dev_sp", ids, id => Content.Enemies[id].Name, id => Content.Enemies[id].Color, id => Content.Enemies[id].Elite, id => r.IsOver, x, y, w,
+                id => { Spawn(r, id, spawnN == 0 ? r.Cols : spawnN); return true; });
+        }
+
+        void Spawn(Run r, string id, int n)
+        {
+            int made = r.DevSpawn(id, n);
+            spawnNote = made == 0 ? "no room near the top" : made < n ? made + " fit" : null;
         }
 
         /// <summary>One owned ball or item: colour dot, name, level with − / +, and remove. True when something was tapped.</summary>

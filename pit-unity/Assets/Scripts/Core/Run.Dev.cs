@@ -53,6 +53,44 @@ namespace Pit.Core
             StartBoss();
         }
 
+        /// <summary>
+        /// Dev: n foes of a type (null = mixed from the turn's pool) in the free cells of the highest row near the top that
+        /// has room, fading in like a wave. They belong to no wave, so they do not hold up the next one. Returns how many fit.
+        /// </summary>
+        public int DevSpawn(string type, int n)
+        {
+            if (IsOver) return 0;
+            if (Mode == Mode.Intro) Mode = Mode.Playing;
+            var pool = EnemyPool(Turn);
+            int made = 0;
+            for (int k = 0; k < n; k++)
+            {
+                string t = type ?? pool[R.Int(0, pool.Count - 1)];
+                var d = Content.Enemies[t];
+                int wc = System.Math.Max(1, (int)System.Math.Ceiling(d.W)), hc = System.Math.Max(1, (int)System.Math.Ceiling(d.H));
+                var free = new List<int>();
+                int row = 0;
+                for (; row <= Rows / 2 && free.Count == 0; row++)
+                    for (int c = 0; c + wc <= Cols; c++)
+                        if (DevFree(c * CELL, row * CELL, wc * CELL, hc * CELL)) free.Add(c);
+                if (free.Count == 0) break;
+                row--;
+                int col = free[R.Int(0, free.Count - 1)];
+                var e = MakeEnemy(t, col * CELL, row * CELL, Turn, 0);
+                e.Entry = 0.4f + 0.08f * k;
+                Enemies.Add(e);
+                made++;
+            }
+            return made;
+        }
+
+        bool DevFree(float x, float y, float w, float h)
+        {
+            foreach (var e in Enemies)
+                if (!e.Dead && !e.Boss && x < e.X + e.W - 0.01f && e.X < x + w - 0.01f && y < e.Y + e.H - 0.01f && e.Y < y + h - 0.01f) return false;
+            return true;
+        }
+
         /// <summary>Dev: a ball in a free slot (false when the slots are full).</summary>
         public bool DevAddBall(string id)
         {
