@@ -22,11 +22,14 @@ Under the hill town of Peal, an old bell foundry slid into a sinkhole. A crew of
 Drag to move. Your balls fire on their own. Tap a foe to focus it. Pick upgrades, fuse balls into stronger ones, and survive long enough to face the Bellwarden.
 
 <div align="center">
-<img src="pit-unity/Docs/shots/hud.png" width="240" alt="In a run">
-&nbsp;
-<img src="pit-unity/Docs/shots/levelup.png" width="240" alt="Level-up choice">
-&nbsp;
-<img src="pit-unity/Docs/shots/crucible.png" width="240" alt="The Crucible">
+<img src="pit-unity/Docs/shots/readme/hero_close.png" width="600" alt="Tinker firing into a crowd of burning and frozen foes">
+<br><br>
+<img src="pit-unity/Docs/shots/readme/hero_fight.png" width="190" alt="A busy fight">
+<img src="pit-unity/Docs/shots/readme/ray.png" width="190" alt="Ray beams sweeping rows">
+<img src="pit-unity/Docs/shots/readme/boss.png" width="190" alt="The Bellwarden">
+<img src="pit-unity/Docs/shots/readme/levelup.png" width="190" alt="Level-up choice">
+<br>
+<sub>Fight · Ray beams · Boss · Level up</sub>
 </div>
 
 ## Highlights
