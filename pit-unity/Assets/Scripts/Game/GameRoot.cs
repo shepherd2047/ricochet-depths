@@ -11,7 +11,7 @@ namespace Pit.Game
 
         const float DesignW = 360, DesignH = 640, Step = 1 / 60f;
         // the whole game runs 44 % faster (two 20 % steps) than the sim's own clock; the x1 / x1.5 / x2 button multiplies on top
-        public static float GameSpeed = 1.44f;   // the dev panel tunes it live
+        public static float GameSpeed = 1.87f;   // the dev panel tunes it live
         // the board comes down 25 % faster than the sim's own pace (Run.Descent); the dev panel can change it live
         public const float Descent = 1.25f;
 
