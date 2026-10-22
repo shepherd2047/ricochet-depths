@@ -1,7 +1,7 @@
 // -pitScreen readme -pitKind fight|boss|ray|levelup|close [-pitExposure 0.9] [-pitBoss 0] [-pitFrom 25 -pitTo 40] [-pitLead 30] [-pitLevels 12] [-pitFreeze 60] [-pitPick 0]
 // Store / README shots. The bot plays a fixed run (seed 1234) with Ember, Rime, Spark and Ray at level 3 in the four
 // slots, +Lead (more baby balls, so the board is busy) and the hero in god mode. Pass 1 plays the run in the core alone and scores every frame of the shot window
-// (balls in flight, a launch in the last 0.1 s so the muzzle flash shows, burning and frozen foes, recent chains and row
+// (balls in flight, a launch in the last 0.1 s so the muzzle flash shows, burning and frozen foes, XP gems on the floor, recent chains and row
 // beams); pass 2 replays the same run through the views up to the best frame. The exposure lift is a capture-only
 // volume; nothing in the game changes.
 using System;
@@ -83,6 +83,7 @@ namespace Pit.EditorTools
                     if (r.Has(e, "burn")) burning++;
                     if (r.Has(e, "freeze")) frozen++;
                 }
+                if (Kind != "boss" && r.Banner != null && r.Banner.T > 0) return -1;   // no BOARD CLEAR banner over the shot
                 bool flash = Frame - LastLaunch <= 5;
                 if (Kind == "ray")
                 {
@@ -92,6 +93,11 @@ namespace Pit.EditorTools
                 }
                 if (field < (Kind == "boss" ? 10 : 14)) return -1;
                 float s = Math.Min(field, 25) * 3 + Math.Min(burning, 5) * 4 + Math.Min(frozen, 4) * 10 + Math.Min(foes, 16) * 2;
+                // a few XP gems lying on the floor show the pickups (fight and close want at least two)
+                int gems = 0;
+                foreach (var d in r.Drops) if (d.Kind == DropKind.Gem && !d.Flying && !d.Got) gems++;
+                if ((Kind == "close" || Kind == "fight") && gems < 2) return -1;
+                s += Math.Min(gems, 4) * 6;
                 if (Frame - LastArc <= 20) s += 8;
                 if (Frame - LastRow <= 25) s += 8;
                 if (flash) s += 20; else if (Kind == "close" || Kind == "fight") return -1;
