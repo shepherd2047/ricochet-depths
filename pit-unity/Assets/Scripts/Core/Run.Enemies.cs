@@ -7,8 +7,8 @@ namespace Pit.Core
     {
         readonly List<Enemy> moved = new List<Enemy>();
 
-        // foes lunge at the hero (and blow up) when they touch the bottom edge of the board, or when the hero touches them
-        public float AttackLine { get { return Bh - 0.05f; } }
+        // foes lunge at the hero (and blow up) when they touch the bottom edge of the screen, or when the hero touches them
+        public float AttackLine { get { return (float.IsNaN(ViewBottom) ? Bh : M.Max(Bh, ViewBottom)) - 0.05f; } }
 
         void StepEnemies(float dt)
         {

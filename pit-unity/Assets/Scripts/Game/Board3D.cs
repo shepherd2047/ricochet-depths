@@ -275,7 +275,7 @@ namespace Pit.Game
             wv.HeroBack = HeroBackCells * Run.CELL * HeroGrow;
             // no dead floor under the board: the hero walks down until its ground ring meets the HUD's top edge
             var low = ScreenToBoard(viewW / 2, wv.Bottom - 2);
-            if (low.y > -900) r.HeroMaxY = low.y - HeroRingCells / 2 * Run.CELL * HeroGrow;
+            if (low.y > -900) { r.HeroMaxY = low.y - HeroRingCells / 2 * Run.CELL * HeroGrow; r.ViewBottom = low.y; }
             float shake = r.Shake > 0 ? r.Shake * 0.12f : 0;
             var jit = shake > 0 ? camRight * ((Random.value - 0.5f) * shake) + camUp * ((Random.value - 0.5f) * shake) : Vector3.zero;
             Cam.transform.localPosition = camPos + jit;

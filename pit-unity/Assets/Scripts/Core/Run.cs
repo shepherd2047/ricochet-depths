@@ -81,6 +81,8 @@ namespace Pit.Core
         /// <summary>How far down (board y) the hero may walk: the view sets it to the bottom edge of what the camera
         /// shows above the HUD. NaN (no view, the sims) keeps the old limit, half a cell above the board's near edge.</summary>
         public float HeroMaxY = float.NaN;
+        /// <summary>The board y at the bottom of the screen (the HUD's top edge), set by the view; NaN in the sims (= Bh).</summary>
+        public float ViewBottom = float.NaN;
         float HeroYMax { get { return float.IsNaN(HeroMaxY) ? Bh - 0.5f : M.Max(Bh - 0.5f, HeroMaxY); } }
 
         // ------------------------------------------------------------ derived player numbers (recomputed by Derive)
