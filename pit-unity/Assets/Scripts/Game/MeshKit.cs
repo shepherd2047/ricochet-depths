@@ -560,6 +560,7 @@ namespace Pit.Game
             m = new Mesh { name = name };
             m.SetVertices(pos); m.SetNormals(nor); m.SetColors(col); m.SetUVs(0, uv);
             m.subMeshCount = nsub;
+            List<int> tri0 = null;
             for (int s = 0; s < nsub; s++)
             {
                 var tri = new List<int>(counts[s]);
@@ -570,10 +571,43 @@ namespace Pit.Game
                     agree += Vector3.Dot(Vector3.Cross(pos[tri[i + 1]] - pos[tri[i]], pos[tri[i + 2]] - pos[tri[i]]), nor[tri[i]] + nor[tri[i + 1]] + nor[tri[i + 2]]);
                 if (agree < 0) for (int i = 0; i < tri.Count; i += 3) { int x = tri[i + 1]; tri[i + 1] = tri[i + 2]; tri[i + 2] = x; }
                 m.SetTriangles(tri, s, true);
+                if (s == 0) tri0 = tri;
             }
+            if (name.StartsWith("T1_FloorStrip") && tri0 != null) FloorBase(m, pos, nor, uv, col, tri0);
             scenery[name] = m;
             SceneryVerts = Mathf.Max(SceneryVerts, nv);
             return m;
+        }
+
+        /// <summary>
+        /// The floor strips are loose bevelled slabs with nothing under them, so the seams showed the black void. A plane
+        /// under the slabs, in a tile's own texture colour a little darker, keeps the seams readable but quiet.
+        /// </summary>
+        const float SeamShade = 0.72f;
+        static void FloorBase(Mesh m, List<Vector3> pos, List<Vector3> nor, List<Vector2> uv, List<Color32> col, List<int> tri0)
+        {
+            var tri = new List<int>(tri0);
+            // a tile top's middle: the first triangle whose corners all face straight up (up is -z)
+            Vector2 tuv = uv[0];
+            for (int i = 0; i < tri.Count; i += 3)
+                if (nor[tri[i]].z < -0.99f && nor[tri[i + 1]].z < -0.99f && nor[tri[i + 2]].z < -0.99f)
+                {
+                    tuv = new Vector2((uv[tri[i]].x + uv[tri[i + 1]].x + uv[tri[i + 2]].x) / 3, (uv[tri[i]].y + uv[tri[i + 1]].y + uv[tri[i + 2]].y) / 3);
+                    break;
+                }
+            float x0 = float.MaxValue, x1 = float.MinValue, y0 = float.MaxValue, y1 = float.MinValue, z = float.MinValue;
+            foreach (var p in pos) { x0 = Mathf.Min(x0, p.x); x1 = Mathf.Max(x1, p.x); y0 = Mathf.Min(y0, p.y); y1 = Mathf.Max(y1, p.y); z = Mathf.Max(z, p.z); }
+            z += 0.002f;   // just under the slabs' feet (up is -z)
+            int v0 = pos.Count;
+            pos.Add(new Vector3(x0, y0, z)); pos.Add(new Vector3(x1, y0, z));
+            pos.Add(new Vector3(x1, y1, z)); pos.Add(new Vector3(x0, y1, z));
+            byte c = (byte)(255 * SeamShade);
+            for (int k = 0; k < 4; k++) { nor.Add(new Vector3(0, 0, -1)); uv.Add(tuv); col.Add(new Color32(c, c, c, 255)); }
+            var q = new List<int> { v0, v0 + 1, v0 + 2, v0, v0 + 2, v0 + 3 };
+            if (Vector3.Dot(Vector3.Cross(pos[v0 + 1] - pos[v0], pos[v0 + 2] - pos[v0]), Vector3.back) < 0) { q[1] = v0 + 2; q[2] = v0 + 1; q[4] = v0 + 3; q[5] = v0 + 2; }
+            tri.AddRange(q);
+            m.SetVertices(pos); m.SetNormals(nor); m.SetColors(col); m.SetUVs(0, uv);
+            m.SetTriangles(tri, 0, true);
         }
 
         // ------------------------------------------------------------ parts that toggle at runtime
