@@ -632,61 +632,43 @@ namespace Pit.Game
         }
 
         // ------------------------------------------------------------ XP gems (style.md §1, 经验宝石)
-        /// <summary>Gem hues by tier (V &lt; 10, &lt; 100, ≥ 100): green, cyan, pink, deep enough that the facets read.</summary>
-        public static readonly Color32[] GemCol = { Palette.Hsv(0.37f, 0.86f, 0.86f), Palette.Hsv(0.53f, 0.86f, 0.92f), Palette.Hsv(0.88f, 0.72f, 0.96f) };
+        /// <summary>The XP gem crystal of a value tier (V &lt; 10, &lt; 100, ≥ 100): pit-art's "B Cluster", one, two or three crystals.</summary>
+        public static Mesh Gem(int tier) { return GemPiece("gem_t" + (tier + 1)); }
+        /// <summary>The glowing ring on the floor under a gem of that tier.</summary>
+        public static Mesh GemRing(int tier) { return GemPiece("gem_ring_t" + (tier + 1)); }
 
         /// <summary>
-        /// A cut gem standing on its point, 1 tall: a six-sided girdle, a short crown with a flat table and a long pavilion
-        /// (24 triangles, flat shaded). Alternate facets are a shade darker so the cut reads even out of the key light.
-        /// uv.x 0.25 is a modest glow (PitUnit's boost ×3), enough for a faint bloom rim on the lit facets only.
+        /// Loads Resources/Models/&lt;name&gt;.bytes from Tools/gem_glb_to_bytes.py (pit-art models/lowpoly/gem_xp.glb, see
+        /// GEM_INTEGRATION.md): untextured, in cells, standing on z = 0, facet colour in the vertex colour and the emissive
+        /// strength in uv.x. z is flipped to the game's frame, where up is -z.
         /// </summary>
-        public static Mesh Gem(int tier)
+        const float GemEmis = 0.4f;   // pit-art's emissive is tuned for its preview: PitUnit's ×3 on top washed the facets out to white
+        static Mesh GemPiece(string name)
         {
             Mesh m;
-            string key = "gem" + tier;
-            if (cache.TryGetValue(key, out m)) return m;
-            var k = new MeshKit(11 + tier);
-            var c = GemCol[tier];
-            var dark = new Color32((byte)(c.r * 0.78f), (byte)(c.g * 0.78f), (byte)(c.b * 0.78f), 255);
-            var lite = new Color32((byte)Mathf.Min(255, c.r * 1.08f + 20), (byte)Mathf.Min(255, c.g * 1.08f + 20), (byte)Mathf.Min(255, c.b * 1.08f + 20), 255);
-            const int N = 6;
-            const float Rg = 0.36f, Rt = 0.2f, Zg = -0.62f, Zt = -1f, Emit = 0.25f;
-            var tip = new Vector3(0, 0, 0);
-            var mid = new Vector3(0, 0, Zg);
-            var top = new Vector3(0, 0, Zt);
-            for (int i = 0; i < N; i++)
+            if (cache.TryGetValue(name, out m)) return m;
+            var ta = Resources.Load<TextAsset>("Models/" + name);
+            if (ta == null) { Debug.LogWarning("Models: Resources/Models/" + name + " missing"); cache[name] = null; return null; }
+            var b = ta.bytes;
+            int nv = System.BitConverter.ToInt32(b, 0), ni = System.BitConverter.ToInt32(b, 8), o = 12;
+            var pos = new List<Vector3>(nv); var nor = new List<Vector3>(nv); var uv = new List<Vector2>(nv); var col = new List<Color32>(nv);
+            for (int i = 0; i < nv; i++, o += 36)
             {
-                float a0 = i * Mathf.PI * 2 / N, a1 = (i + 1) * Mathf.PI * 2 / N, ah0 = a0 + Mathf.PI / N, ah1 = a1 + Mathf.PI / N;
-                var g0 = new Vector3(Mathf.Cos(a0) * Rg, Mathf.Sin(a0) * Rg, Zg);
-                var g1 = new Vector3(Mathf.Cos(a1) * Rg, Mathf.Sin(a1) * Rg, Zg);
-                var t0 = new Vector3(Mathf.Cos(ah0 - Mathf.PI * 2 / N) * Rt, Mathf.Sin(ah0 - Mathf.PI * 2 / N) * Rt, Zt);
-                var t1 = new Vector3(Mathf.Cos(ah0) * Rt, Mathf.Sin(ah0) * Rt, Zt);
-                var col = i % 2 == 0 ? c : dark;
-                k.Tri(tip, g0, g1, col, mid, Emit);                     // pavilion
-                k.Tri(g0, g1, t1, i % 2 == 0 ? lite : c, mid, Emit);    // crown: kite facets between girdle and table
-                k.Tri(g0, t1, t0, i % 2 == 0 ? c : lite, mid, Emit);
-                k.Tri(top, t0, t1, lite, mid, Emit * 1.3f);             // the table, a hexagon fan
+                pos.Add(new Vector3(F(b, o), F(b, o + 4), -F(b, o + 8)));
+                nor.Add(new Vector3(F(b, o + 12), F(b, o + 16), -F(b, o + 20)));
+                uv.Add(new Vector2(F(b, o + 24) * GemEmis, F(b, o + 28)));
+                col.Add(new Color32(b[o + 32], b[o + 33], b[o + 34], 255));
             }
-            m = k.Build(key);
-            cache[key] = m;
-            return m;
-        }
-
-        /// <summary>A flat dark disc on the floor (r 0.5), the gems' contact shadow.</summary>
-        public static Mesh ShadowDisc()
-        {
-            Mesh m;
-            if (cache.TryGetValue("shadowdisc", out m)) return m;
-            var k = new MeshKit(5);
-            var col = new Color32(8, 8, 12, 255);
-            const int N = 10;
-            for (int i = 0; i < N; i++)
-            {
-                float a0 = i * Mathf.PI * 2 / N, a1 = (i + 1) * Mathf.PI * 2 / N;
-                k.Tri(Vector3.zero, new Vector3(Mathf.Cos(a0) * 0.5f, Mathf.Sin(a0) * 0.5f, 0), new Vector3(Mathf.Cos(a1) * 0.5f, Mathf.Sin(a1) * 0.5f, 0), col, new Vector3(0, 0, 1));
-            }
-            m = k.Build("shadowdisc");
-            cache["shadowdisc"] = m;
+            var tri = new List<int>(ni);
+            for (int i = 0; i < ni; i++, o += 2) tri.Add(System.BitConverter.ToUInt16(b, o));
+            // the z flip mirrors the mesh: keep the winding that agrees with the normals
+            float agree = 0;
+            for (int i = 0; i < ni; i += 3)
+                agree += Vector3.Dot(Vector3.Cross(pos[tri[i + 1]] - pos[tri[i]], pos[tri[i + 2]] - pos[tri[i]]), nor[tri[i]] + nor[tri[i + 1]] + nor[tri[i + 2]]);
+            if (agree < 0) for (int i = 0; i < ni; i += 3) { int x = tri[i + 1]; tri[i + 1] = tri[i + 2]; tri[i + 2] = x; }
+            m = new Mesh { name = name };
+            m.SetVertices(pos); m.SetNormals(nor); m.SetColors(col); m.SetUVs(0, uv); m.SetTriangles(tri, 0, true);
+            cache[name] = m;
             return m;
         }
 

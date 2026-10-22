@@ -761,10 +761,10 @@ namespace Pit.Game
         }
 
         // ------------------------------------------------------------ XP gems (style.md §1, 经验宝石)
-        // 3D cut gems by value tier, spinning and bobbing over a small contact shadow; WorldView draws the other drops
-        static readonly float[] GemHeight = { 0.36f, 0.46f, 0.58f };   // cells: they have to read at phone size from 40°
-        const float GemSpin = 90, GemBob = 0.05f, GemLift = 0.1f;
-        sealed class GemView { public GameObject Go, Shadow; public MeshFilter Mf; public int Tier = -1; }
+        // 3D gems by value tier (pit-art's B Cluster), the crystal spinning and bobbing over a glowing ring that stays on the
+        // floor; WorldView draws the other drops. The meshes are in cells already.
+        const float GemSpin = 90, GemBob = 0.05f, GemLift = 0.1f, RingSpin = -30, RingZ = 0.03f;   // RingZ: clear of the floor slabs' tops
+        sealed class GemView { public GameObject Go, Ring; public MeshFilter Mf, Rf; public int Tier = -1; }
         readonly List<GemView> gems = new List<GemView>();
 
         public static int GemTier(int v) { return v >= 100 ? 2 : v >= 10 ? 1 : 0; }
@@ -779,28 +779,27 @@ namespace Pit.Game
                 if (n == gems.Count) gems.Add(NewGem());
                 var gv = gems[n++];
                 int tier = GemTier(d.V);
-                if (gv.Tier != tier) { gv.Mf.sharedMesh = Models.Gem(tier); gv.Tier = tier; }
-                if (!gv.Go.activeSelf) { gv.Go.SetActive(true); gv.Shadow.SetActive(true); }
-                float h = GemHeight[tier], ph = (d.X * 7.31f + d.Y * 3.17f) % 1f;
+                if (gv.Tier != tier) { gv.Mf.sharedMesh = Models.Gem(tier); gv.Rf.sharedMesh = Models.GemRing(tier); gv.Tier = tier; }
+                if (!gv.Go.activeSelf) gv.Go.SetActive(true);
+                // the ring marks where the gem lies; a gem flying to the hero leaves it behind
+                if (gv.Ring.activeSelf == d.Flying) gv.Ring.SetActive(!d.Flying);
+                float ph = (d.X * 7.31f + d.Y * 3.17f) % 1f;
                 float bob = GemLift + GemBob * (0.5f + 0.5f * Mathf.Sin((t * 0.6f + ph) * Mathf.PI * 2));
                 gv.Go.transform.localPosition = P(d.X, d.Y, -(d.Flying ? 0.35f : bob));
                 gv.Go.transform.localRotation = Quaternion.Euler(0, 0, t * GemSpin + ph * 360);
-                gv.Go.transform.localScale = new Vector3(h, h, h);
-                gv.Shadow.transform.localPosition = P(d.X, d.Y, -0.004f);
-                float sr = h * (0.62f - bob * 0.8f);
-                gv.Shadow.transform.localScale = new Vector3(sr, sr * 0.8f, 1);
+                gv.Ring.transform.localPosition = P(d.X, d.Y, -RingZ);
+                gv.Ring.transform.localRotation = Quaternion.Euler(0, 0, t * RingSpin + ph * 360);
             }
             for (int i = n; i < gems.Count; i++)
-                if (gems[i].Go.activeSelf) { gems[i].Go.SetActive(false); gems[i].Shadow.SetActive(false); }
+                if (gems[i].Go.activeSelf) { gems[i].Go.SetActive(false); gems[i].Ring.SetActive(false); }
         }
 
         GemView NewGem()
         {
             var gv = new GemView();
             gv.Go = MakeObject("gem", units, null, out gv.Mf);
-            MeshFilter smf;
-            gv.Shadow = MakeObject("gem-shadow", units, Models.ShadowDisc(), out smf);
-            foreach (var go in new[] { gv.Go, gv.Shadow })
+            gv.Ring = MakeObject("gem-ring", units, null, out gv.Rf);
+            foreach (var go in new[] { gv.Go, gv.Ring })
             {
                 var mr = go.GetComponent<MeshRenderer>();
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
