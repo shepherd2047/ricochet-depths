@@ -18,7 +18,7 @@ using UnityEngine;
 
 namespace Pit.EditorTools
 {
-    public static class PitCapture
+    public static partial class PitCapture
     {
         static string Arg(string name, string def)
         {
@@ -266,7 +266,8 @@ namespace Pit.EditorTools
                 if (vfxBall != null) { RicochetVfx.VfxBank.Ensure().manualTick = true; OnlyBall(r, vfxBall); }
                 bool final = Arg("-pitFinal", null) != null;
                 float after = float.Parse(Arg("-pitAfter", "0"), System.Globalization.CultureInfo.InvariantCulture), finalAt = 0;
-                while (!r.IsOver && r.Time < 3000)
+                if (which == "readme") Readme(r, heroId, board, world, gfx, ui, screens, w, h, scale, root.transform);
+                while (which != "readme" && !r.IsOver && r.Time < 3000)
                 {
                     if (final)
                     {
