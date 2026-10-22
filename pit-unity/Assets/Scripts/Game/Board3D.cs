@@ -763,7 +763,8 @@ namespace Pit.Game
         // ------------------------------------------------------------ XP gems (style.md §1, 经验宝石)
         // 3D gems by value tier (pit-art's B Cluster), the crystal spinning and bobbing over a glowing ring that stays on the
         // floor; WorldView draws the other drops. The meshes are in cells already.
-        const float GemSpin = 90, GemBob = 0.05f, GemLift = 0.1f, RingSpin = -30, RingZ = 0.03f;   // RingZ: clear of the floor slabs' tops
+        const float GemSpin = 30, GemBob = 0.05f, GemLift = 0.1f, RingSpin = -10, RingZ = 0.03f;   // RingZ: clear of the floor slabs' tops
+        const float GemScale = 1.5f;   // the art meshes are in cells; the user wanted them half again as big (2026-10-22)
         sealed class GemView { public GameObject Go, Ring; public MeshFilter Mf, Rf; public int Tier = -1; }
         readonly List<GemView> gems = new List<GemView>();
 
@@ -789,6 +790,7 @@ namespace Pit.Game
                 gv.Go.transform.localRotation = Quaternion.Euler(0, 0, t * GemSpin + ph * 360);
                 gv.Ring.transform.localPosition = P(d.X, d.Y, -RingZ);
                 gv.Ring.transform.localRotation = Quaternion.Euler(0, 0, t * RingSpin + ph * 360);
+                gv.Go.transform.localScale = gv.Ring.transform.localScale = new Vector3(GemScale, GemScale, GemScale);
             }
             for (int i = n; i < gems.Count; i++)
                 if (gems[i].Go.activeSelf) { gems[i].Go.SetActive(false); gems[i].Ring.SetActive(false); }
