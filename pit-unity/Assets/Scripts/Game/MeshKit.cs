@@ -644,6 +644,21 @@ namespace Pit.Game
         /// GEM_INTEGRATION.md): untextured, in cells, standing on z = 0, facet colour in the vertex colour and the emissive
         /// strength in uv.x. z is flipped to the game's frame, where up is -z.
         /// </summary>
+        /// <summary>pit-art's tier hues (GEM_INTEGRATION.md): green, violet, pink.</summary>
+        static readonly Color32[] GemHue = { new Color32(0x3B, 0xEA, 0x62, 255), new Color32(0x9C, 0x5B, 0xFF, 255), new Color32(0xFF, 0x4B, 0xAE, 255) };
+        const float TopShade = 0.78f, TopEmis = 0.05f;   // the key light lands square on the tops, so they start below the hue
+
+        /// <summary>
+        /// The camera looks down on the crown, and its white-mixed facets under the key light and the white outline read as
+        /// a white block: the up-facing facets go back to the tier hue (a shade under it, the light lifts them), with little glow.
+        /// </summary>
+        static void GemTops(Color32 hue, List<Vector3> nor, List<Vector2> uv, List<Color32> col)
+        {
+            var top = new Color32((byte)(hue.r * TopShade), (byte)(hue.g * TopShade), (byte)(hue.b * TopShade), 255);
+            for (int i = 0; i < nor.Count; i++)
+                if (nor[i].z < -0.35f) { col[i] = top; uv[i] = new Vector2(Mathf.Min(uv[i].x, TopEmis), uv[i].y); }
+        }
+
         const float GemEmis = 0.4f;   // pit-art's emissive is tuned for its preview: PitUnit's ×3 on top washed the facets out to white
         static Mesh GemPiece(string name)
         {
@@ -668,6 +683,7 @@ namespace Pit.Game
             for (int i = 0; i < ni; i += 3)
                 agree += Vector3.Dot(Vector3.Cross(pos[tri[i + 1]] - pos[tri[i]], pos[tri[i + 2]] - pos[tri[i]]), nor[tri[i]] + nor[tri[i + 1]] + nor[tri[i + 2]]);
             if (agree < 0) for (int i = 0; i < ni; i += 3) { int x = tri[i + 1]; tri[i + 1] = tri[i + 2]; tri[i + 2] = x; }
+            if (name.StartsWith("gem_t")) GemTops(GemHue[name[5] - '1'], nor, uv, col);
             m = new Mesh { name = name };
             m.SetVertices(pos); m.SetNormals(nor); m.SetColors(col); m.SetUVs(0, uv); m.SetTriangles(tri, 0, true);
             cache[name] = m;
