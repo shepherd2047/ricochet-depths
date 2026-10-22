@@ -287,6 +287,7 @@ namespace Pit.Game
 
             Scenery(r);
             Units(r);
+            Gems(r);
             Vfx(r);
             Hero(r);
             MuzzleFlash(g);
@@ -757,6 +758,58 @@ namespace Pit.Game
             foreach (var kv in live) { VfxRelease(kv.Value); kv.Value.Go.SetActive(false); pool.Push(kv.Value); }
             live.Clear();
             VfxClear();
+        }
+
+        // ------------------------------------------------------------ XP gems (style.md §1, 经验宝石)
+        // 3D cut gems by value tier, spinning and bobbing over a small contact shadow; WorldView draws the other drops
+        static readonly float[] GemHeight = { 0.36f, 0.46f, 0.58f };   // cells: they have to read at phone size from 40°
+        const float GemSpin = 90, GemBob = 0.05f, GemLift = 0.1f;
+        sealed class GemView { public GameObject Go, Shadow; public MeshFilter Mf; public int Tier = -1; }
+        readonly List<GemView> gems = new List<GemView>();
+
+        public static int GemTier(int v) { return v >= 100 ? 2 : v >= 10 ? 1 : 0; }
+
+        void Gems(Run r)
+        {
+            int n = 0;
+            float t = Step(r.Time);
+            foreach (var d in r.Drops)
+            {
+                if (d.Kind != DropKind.Gem) continue;
+                if (n == gems.Count) gems.Add(NewGem());
+                var gv = gems[n++];
+                int tier = GemTier(d.V);
+                if (gv.Tier != tier) { gv.Mf.sharedMesh = Models.Gem(tier); gv.Tier = tier; }
+                if (!gv.Go.activeSelf) { gv.Go.SetActive(true); gv.Shadow.SetActive(true); }
+                float h = GemHeight[tier], ph = (d.X * 7.31f + d.Y * 3.17f) % 1f;
+                float bob = GemLift + GemBob * (0.5f + 0.5f * Mathf.Sin((t * 0.6f + ph) * Mathf.PI * 2));
+                gv.Go.transform.localPosition = P(d.X, d.Y, -(d.Flying ? 0.35f : bob));
+                gv.Go.transform.localRotation = Quaternion.Euler(0, 0, t * GemSpin + ph * 360);
+                gv.Go.transform.localScale = new Vector3(h, h, h);
+                gv.Shadow.transform.localPosition = P(d.X, d.Y, -0.004f);
+                float sr = h * (0.62f - bob * 0.8f);
+                gv.Shadow.transform.localScale = new Vector3(sr, sr * 0.8f, 1);
+            }
+            for (int i = n; i < gems.Count; i++)
+                if (gems[i].Go.activeSelf) { gems[i].Go.SetActive(false); gems[i].Shadow.SetActive(false); }
+        }
+
+        GemView NewGem()
+        {
+            var gv = new GemView();
+            gv.Go = MakeObject("gem", units, null, out gv.Mf);
+            MeshFilter smf;
+            gv.Shadow = MakeObject("gem-shadow", units, Models.ShadowDisc(), out smf);
+            foreach (var go in new[] { gv.Go, gv.Shadow })
+            {
+                var mr = go.GetComponent<MeshRenderer>();
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                // a property block like every other unit renderer (see NewView: without one the SRP batcher mixes it up
+                // with the scenery)
+                var pb = new MaterialPropertyBlock(); pb.SetFloat("_Flash", 0);
+                mr.SetPropertyBlock(pb);
+            }
+            return gv;
         }
 
         void Units(Run r)

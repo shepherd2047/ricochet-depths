@@ -245,15 +245,8 @@ namespace Pit.Game
             {
                 case DropKind.Gem:
                     {
-                        // big enough to read at a glance, with a soft halo in the gem's colour that the Glow layer's
-                        // HDR boost pushes into bloom; halo pulse and bob step at 8 fps like the rest of the pixel art
+                        if (Units3D) break;   // Board3D.Gems: 3D cut gems (style.md §1)
                         float rr = Mathf.Min(13, 5 + Mathf.Sqrt(d.V) * 1.5f);
-                        uint hc = d.V >= 100 ? 0xff7bf2u : d.V >= 10 ? 0x6be3ffu : 0x6dff8eu;
-                        float ph = (d.X * 7.31f + d.Y * 3.17f) % 1f;
-                        float step = Mathf.Floor((r.Time + ph) * 8) / 8;
-                        float pulse = 0.5f + 0.5f * Mathf.Sin(step * Mathf.PI * 2 * 1.25f);
-                        y -= Mathf.Round(Mathf.Sin((step + ph) * Mathf.PI * 2 * 0.6f) * 1.5f);
-                        g.Sprite(Cell("soft"), x, y, rr * (5.2f + 0.8f * pulse), Col.Hex(hc, 0.4f + 0.2f * pulse));
                         g.Sprite(Cell(d.V >= 100 ? "gem:l" : d.V >= 10 ? "gem:m" : "gem:s"), x, y, rr * 2.6f, Col.White);
                         break;
                     }

@@ -581,9 +581,11 @@ namespace Pit.Game
 
         /// <summary>
         /// The floor strips are loose bevelled slabs with nothing under them, so the seams showed the black void. A plane
-        /// under the slabs, in a tile's own texture colour a little darker, keeps the seams readable but quiet.
+        /// under the slabs, in a tile's own texture colour a little darker, keeps the seams readable but quiet. The bevels
+        /// themselves sample a near-black texel of the atlas (the thick black lines between tiles): they take the tile
+        /// top's texel instead, a shade darker, so a seam is a soft edge.
         /// </summary>
-        const float SeamShade = 0.72f;
+        const float SeamShade = 0.72f, BevelShade = 0.84f, TopInset = 0.005f;
         static void FloorBase(Mesh m, List<Vector3> pos, List<Vector3> nor, List<Vector2> uv, List<Color32> col, List<int> tri0)
         {
             var tri = new List<int>(tri0);
@@ -594,6 +596,25 @@ namespace Pit.Game
                 {
                     tuv = new Vector2((uv[tri[i]].x + uv[tri[i + 1]].x + uv[tri[i + 2]].x) / 3, (uv[tri[i]].y + uv[tri[i + 1]].y + uv[tri[i + 2]].y) / 3);
                     break;
+                }
+            // the tile tops reach a texel or two into the atlas's black tile border: pull each corner in past it
+            var inset = new Vector2[pos.Count];
+            for (int i = 0; i < tri.Count; i += 3)
+                for (int a = 0; a < 3; a++)
+                {
+                    int v = tri[i + a], v1 = tri[i + (a + 1) % 3], v2 = tri[i + (a + 2) % 3];
+                    if (nor[v].z > -0.99f) continue;
+                    float du = uv[v].x < Mathf.Max(uv[v1].x, uv[v2].x) - 1e-4f ? TopInset : uv[v].x > Mathf.Min(uv[v1].x, uv[v2].x) + 1e-4f ? -TopInset : 0;
+                    float dv = uv[v].y < Mathf.Max(uv[v1].y, uv[v2].y) - 1e-4f ? TopInset : uv[v].y > Mathf.Min(uv[v1].y, uv[v2].y) + 1e-4f ? -TopInset : 0;
+                    inset[v] = new Vector2(du, dv);
+                }
+            for (int i = 0; i < pos.Count; i++) uv[i] = new Vector2(uv[i].x + inset[i].x, uv[i].y + inset[i].y);
+            for (int i = 0; i < pos.Count; i++)
+                if (nor[i].z > -0.99f)
+                {
+                    uv[i] = tuv;
+                    var k = col[i];
+                    col[i] = new Color32((byte)(k.r * BevelShade), (byte)(k.g * BevelShade), (byte)(k.b * BevelShade), k.a);
                 }
             float x0 = float.MaxValue, x1 = float.MinValue, y0 = float.MaxValue, y1 = float.MinValue, z = float.MinValue;
             foreach (var p in pos) { x0 = Mathf.Min(x0, p.x); x1 = Mathf.Max(x1, p.x); y0 = Mathf.Min(y0, p.y); y1 = Mathf.Max(y1, p.y); z = Mathf.Max(z, p.z); }
@@ -608,6 +629,65 @@ namespace Pit.Game
             tri.AddRange(q);
             m.SetVertices(pos); m.SetNormals(nor); m.SetColors(col); m.SetUVs(0, uv);
             m.SetTriangles(tri, 0, true);
+        }
+
+        // ------------------------------------------------------------ XP gems (style.md §1, 经验宝石)
+        /// <summary>Gem hues by tier (V &lt; 10, &lt; 100, ≥ 100): green, cyan, pink, deep enough that the facets read.</summary>
+        public static readonly Color32[] GemCol = { Palette.Hsv(0.37f, 0.86f, 0.86f), Palette.Hsv(0.53f, 0.86f, 0.92f), Palette.Hsv(0.88f, 0.72f, 0.96f) };
+
+        /// <summary>
+        /// A cut gem standing on its point, 1 tall: a six-sided girdle, a short crown with a flat table and a long pavilion
+        /// (24 triangles, flat shaded). Alternate facets are a shade darker so the cut reads even out of the key light.
+        /// uv.x 0.25 is a modest glow (PitUnit's boost ×3), enough for a faint bloom rim on the lit facets only.
+        /// </summary>
+        public static Mesh Gem(int tier)
+        {
+            Mesh m;
+            string key = "gem" + tier;
+            if (cache.TryGetValue(key, out m)) return m;
+            var k = new MeshKit(11 + tier);
+            var c = GemCol[tier];
+            var dark = new Color32((byte)(c.r * 0.78f), (byte)(c.g * 0.78f), (byte)(c.b * 0.78f), 255);
+            var lite = new Color32((byte)Mathf.Min(255, c.r * 1.08f + 20), (byte)Mathf.Min(255, c.g * 1.08f + 20), (byte)Mathf.Min(255, c.b * 1.08f + 20), 255);
+            const int N = 6;
+            const float Rg = 0.36f, Rt = 0.2f, Zg = -0.62f, Zt = -1f, Emit = 0.25f;
+            var tip = new Vector3(0, 0, 0);
+            var mid = new Vector3(0, 0, Zg);
+            var top = new Vector3(0, 0, Zt);
+            for (int i = 0; i < N; i++)
+            {
+                float a0 = i * Mathf.PI * 2 / N, a1 = (i + 1) * Mathf.PI * 2 / N, ah0 = a0 + Mathf.PI / N, ah1 = a1 + Mathf.PI / N;
+                var g0 = new Vector3(Mathf.Cos(a0) * Rg, Mathf.Sin(a0) * Rg, Zg);
+                var g1 = new Vector3(Mathf.Cos(a1) * Rg, Mathf.Sin(a1) * Rg, Zg);
+                var t0 = new Vector3(Mathf.Cos(ah0 - Mathf.PI * 2 / N) * Rt, Mathf.Sin(ah0 - Mathf.PI * 2 / N) * Rt, Zt);
+                var t1 = new Vector3(Mathf.Cos(ah0) * Rt, Mathf.Sin(ah0) * Rt, Zt);
+                var col = i % 2 == 0 ? c : dark;
+                k.Tri(tip, g0, g1, col, mid, Emit);                     // pavilion
+                k.Tri(g0, g1, t1, i % 2 == 0 ? lite : c, mid, Emit);    // crown: kite facets between girdle and table
+                k.Tri(g0, t1, t0, i % 2 == 0 ? c : lite, mid, Emit);
+                k.Tri(top, t0, t1, lite, mid, Emit * 1.3f);             // the table, a hexagon fan
+            }
+            m = k.Build(key);
+            cache[key] = m;
+            return m;
+        }
+
+        /// <summary>A flat dark disc on the floor (r 0.5), the gems' contact shadow.</summary>
+        public static Mesh ShadowDisc()
+        {
+            Mesh m;
+            if (cache.TryGetValue("shadowdisc", out m)) return m;
+            var k = new MeshKit(5);
+            var col = new Color32(8, 8, 12, 255);
+            const int N = 10;
+            for (int i = 0; i < N; i++)
+            {
+                float a0 = i * Mathf.PI * 2 / N, a1 = (i + 1) * Mathf.PI * 2 / N;
+                k.Tri(Vector3.zero, new Vector3(Mathf.Cos(a0) * 0.5f, Mathf.Sin(a0) * 0.5f, 0), new Vector3(Mathf.Cos(a1) * 0.5f, Mathf.Sin(a1) * 0.5f, 0), col, new Vector3(0, 0, 1));
+            }
+            m = k.Build("shadowdisc");
+            cache["shadowdisc"] = m;
+            return m;
         }
 
         // ------------------------------------------------------------ parts that toggle at runtime
