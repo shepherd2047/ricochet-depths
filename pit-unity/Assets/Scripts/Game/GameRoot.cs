@@ -10,8 +10,9 @@ namespace Pit.Game
         enum Screen_ { Title, Heroes, Game }
 
         const float DesignW = 360, DesignH = 640, Step = 1 / 60f;
-        // the whole game runs 44 % faster (two 20 % steps) than the sim's own clock; the x1 / x1.5 / x2 button multiplies on top
-        public static float GameSpeed = 1.87f;   // the dev panel tunes it live
+        // the base pace: 1.87x the sim's own clock (1.2 * 1.2 * 1.3); the x1 / x1.5 / x2 button multiplies on top
+        public const float BaseSpeed = 1.87f;
+        public static float GameSpeed = 1;   // on top of BaseSpeed; the dev panel tunes it live (1 = the base pace)
         // the board comes down 25 % faster than the sim's own pace (Run.Descent); the dev panel can change it live
         public const float Descent = 1.25f;
 
@@ -202,8 +203,8 @@ namespace Pit.Game
             // ---- simulate
             if (screens.BotOn && (r.Mode == Mode.LevelUp || r.Mode == Mode.Fuser)) Bot.AutoPick(r);
             if (screens.BotOn && r.Mode == Mode.Revive) r.GiveUp();   // the bot never watches ads
-            acc += dt * screens.SpeedSetting * GameSpeed;
-            Time.timeScale = dev.Open ? 0 : screens.SpeedSetting * GameSpeed;   // the VFX clock (VfxBank ticks on Time.deltaTime) keeps pace
+            acc += dt * screens.SpeedSetting * BaseSpeed * GameSpeed;
+            Time.timeScale = dev.Open ? 0 : screens.SpeedSetting * BaseSpeed * GameSpeed;   // the VFX clock (VfxBank ticks on Time.deltaTime) keeps pace
             int steps = 0;
             if (dev.Open) acc = 0;   // the dev panel holds the run still
             while (acc >= Step && steps < 8)
